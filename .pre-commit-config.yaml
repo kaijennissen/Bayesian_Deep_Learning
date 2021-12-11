@@ -1,0 +1,24 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v2.3.0
+    hooks:
+      - id: check-yaml
+      - id: end-of-file-fixer
+        exclude: ".dat"
+      - id: trailing-whitespace
+        exclude: ".dat"
+      - id: debug-statements
+      - id: check-added-large-files
+  - repo: https://github.com/psf/black
+    rev: 21.5b2
+    hooks:
+      - id: black
+        stages: [commit, push]
+        types: [python]
+        exclude: ".dat"
+  - repo: https://github.com/PyCQA/isort
+    rev: 5.9.1
+    hooks:
+      - id: isort
+        args: ["--profile", "black", "--filter-files"]
+        language_version: python3

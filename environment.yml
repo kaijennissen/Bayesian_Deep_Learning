@@ -1,0 +1,19 @@
+name: ENV_NAME
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python~=3.8
+  - numpy
+  - pandas
+  - matplotlib
+  - seaborn
+  - pre-commit
+  - black==21.5b2
+  - isort==5.9.1
+  - mypy
+  - pylama
+  - pip
+  - pip:
+    - jax
+    - numpyro
