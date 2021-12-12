@@ -18,7 +18,7 @@ def nonlin(x):
     return jnp.tanh(x)
 
 
-def BNN(X, y=None):
+def BayesianDNN(X, y=None):
 
     N, feature_dim = X.shape
     _, out_dim = 1, 1  # y.shape
@@ -56,8 +56,7 @@ def BNN(X, y=None):
     prec_obs = numpyro.sample("prec_obs", dist.Gamma(3.0, 1.0))
     scale = 1.0 / jnp.sqrt(prec_obs)
 
-    with numpyro.plate("data", size=N, dim=-2):
-        numpyro.sample("y", dist.Normal(loc=mean, scale=scale), obs=y)
+    numpyro.sample("y", dist.Normal(loc=mean, scale=scale), obs=y)
 
 
 def BNNCNN(X, y):
@@ -84,21 +83,23 @@ def BNNCNN(X, y):
 # samp = predictive(rng_key=rng_key, X=X)
 
 
-X = np.random.uniform(-3, 3, size=(100, 1))
-y = 0.5 * np.sin(X) + np.random.normal(loc=0, scale=0.2, size=(100, 1))
+X = np.random.uniform(-3, 2, size=(100, 1))
+y = 2 * np.sin(X) + np.random.normal(loc=0, scale=0.1, size=(100, 1))
 # y = 0.5 * X + np.random.normal(loc=0, scale=0.2, size=(100, 1))
 # plt.plot(X.ravel(), y.ravel(), "x")
 # plt.show()
 rng_key = random.PRNGKey(125)
-kernel = NUTS(BNN)
+kernel = NUTS(BayesianDNN)
 mcmc = MCMC(
     kernel, num_warmup=1000, num_samples=4000, num_chains=1, chain_method="sequential"
 )
 mcmc.run(X=X, y=y, rng_key=rng_key)
 mcmc.print_summary()
 
-X_test = jnp.linspace(-4, 4, num=1000).reshape((-1, 1))
-predictive = Predictive(BNN, posterior_samples=mcmc.get_samples(), parallel=True)
+X_test = jnp.linspace(-5, 5, num=1000).reshape((-1, 1))
+predictive = Predictive(
+    BayesianDNN, posterior_samples=mcmc.get_samples(), num_samples=500, parallel=True
+)
 post_samples = predictive(rng_key=rng_key, X=X_test)
 yhat = jnp.mean(post_samples["y"], axis=0)
 print(yhat.shape)
