@@ -17,6 +17,7 @@ from numpyro.optim import Adam
 from scipy.stats import mode
 
 LAYER_DIMS = [5, 5]
+# https://num.pyro.ai/en/stable/primitives.html#numpyro.contrib.module.random_haiku_module
 
 
 def stratified_samples(X, y, size=200):
@@ -37,10 +38,10 @@ train = pd.read_csv("train.csv")
 test = pd.read_csv("test.csv")
 y = train.pop("label").values
 y_train_onehot = (y[:, np.newaxis] == np.arange(10)) * 1
-X = train.values.reshape(-1, 28, 28)
-X_train, y_train = stratified_samples(X, y, size=2000)
+X = train.values.reshape(-1, 28, 28, 1) / 255
+X_train, y_train = stratified_samples(X, y, size=1000)
 
-X_train = jnp.asarray(X_train)
+X_train = jnp.asarray(X_train)  # type:ignore
 y_train = jnp.asarray(y_train)
 
 
@@ -49,19 +50,19 @@ def nonlin(x):
     return jnp.maximum(0, x)
 
 
+# TODO change axis where the num_filters are calculated
+# TODO keep num_filters
 @jit
 def convolution_fn(inp, W):
-    batch, width_in, height_in = inp.shape
-    k, *_ = W.shape
+    batch, width_in, height_in, *_ = inp.shape
+    height_filter, width_filter, num_filters = W.shape
     width_out = width_in
     height_out = height_in
 
     input_padded = jnp.pad(
-        inp, [(0, 0), (1, 1), (1, 1)], mode="constant", constant_values=0
+        inp, [(0, 0), (1, 1), (1, 1), (0, 0)], mode="constant", constant_values=0
     )
-
-    height_filter, width_filter, num_filters = W.shape
-    output = jnp.zeros((batch, height_out, width_out))
+    output = jnp.zeros((batch, height_out, width_out, num_filters))
 
     for i in range(height_out):
         for j in range(width_out):
@@ -70,23 +71,25 @@ def convolution_fn(inp, W):
             w_start = j
             w_end = w_start + width_filter
             # batch_dim x height x width x channels x num_filters
+            # x_slice = x[vert_start: vert_end, horiz_start: horiz_end, :]
+            # np.sum(np.multiply(input, W)) + float(b)
             val = jnp.sum(
-                input_padded[:, h_start:h_end, w_start:w_end, np.newaxis]
-                * W[np.newaxis, :, :, :],
+                input_padded[:, h_start:h_end, w_start:w_end, :, jnp.newaxis]
+                * W[:, :, jnp.newaxis, :],
                 axis=(1, 2, 3),
             )
-            output.at[:, i, j].set(val)
+            output.at[:, i, j, :].set(val)
     return output
 
 
 @jit
 def pooling_fn(inp):
     pool_size = (2, 2)
-    batch, height_in, width_in = inp.shape
+    batch, height_in, width_in, num_filters = inp.shape
 
     height_out = height_in // pool_size[0]
     width_out = width_in // pool_size[1]
-    output = jnp.zeros((batch, height_out, width_out))
+    output = jnp.zeros((batch, height_out, width_out, num_filters))
     h_step = pool_size[0]
     w_step = pool_size[1]
     for i in range(height_out):
@@ -95,8 +98,8 @@ def pooling_fn(inp):
             h_end = h_start + (i + 1) * h_step
             w_start = j * w_step
             w_end = w_start + (i + 1) * w_step
-            val = np.max(inp[:, h_start:h_end, w_start:w_end], axis=(1, 2))
-            output.at[:, i, j].set(val)
+            val = jnp.max(inp[:, h_start:h_end, w_start:w_end, :], axis=(1, 2))
+            output.at[:, i, j, :].set(val)
     return output
 
 
@@ -110,8 +113,8 @@ def softmax(x):
 
 def BayesianCNN(X, y=None, num_categories=10):
 
-    B, H, W = X.shape
-    num_filters = [64, 32, 16]
+    B, H, W, C = X.shape
+    num_filters = [32, 64, 32]
 
     # Convolution + Max. Pooling
     W1 = numpyro.sample(
@@ -124,17 +127,17 @@ def BayesianCNN(X, y=None, num_categories=10):
     b1 = numpyro.sample(
         "b1",
         dist.Normal(
-            loc=jnp.zeros((H, W)),
-            scale=jnp.ones((H, W)),
+            loc=jnp.zeros((H, W, num_filters[0])),
+            scale=jnp.ones((H, W, num_filters[0])),
         ),
     )
     out_conv1 = nonlin(convolution_fn(X, W1) + b1)
 
-    assert out_conv1.shape == (B, H, W)
+    assert out_conv1.shape == (B, H, W, num_filters[0])
     out_pool1 = pooling_fn(
         out_conv1,
     )
-    assert out_pool1.shape == (B, H // 2, W // 2)
+    assert out_pool1.shape == (B, H // 2, W // 2, num_filters[0])
 
     # Convolution + Max. Pooling
     W2 = numpyro.sample(
@@ -147,14 +150,14 @@ def BayesianCNN(X, y=None, num_categories=10):
     b2 = numpyro.sample(
         "b2",
         dist.Normal(
-            loc=jnp.zeros((H // 2, W // 2)),
-            scale=jnp.ones((H // 2, W // 2)),
+            loc=jnp.zeros((H // 2, W // 2, num_filters[1])),
+            scale=jnp.ones((H // 2, W // 2, num_filters[1])),
         ),
     )
     out_conv2 = nonlin(convolution_fn(out_pool1, W2) + b2)
-    assert out_conv2.shape == (B, H // 2, W // 2)
+    assert out_conv2.shape == (B, H // 2, W // 2, num_filters[1])
     out_pool2 = pooling_fn(out_conv2)
-    assert out_pool2.shape == (B, H // 4, W // 4)
+    assert out_pool2.shape == (B, H // 4, W // 4, num_filters[1])
 
     # Convolution + Max. Pooling
     W3 = numpyro.sample(
@@ -167,33 +170,33 @@ def BayesianCNN(X, y=None, num_categories=10):
     b3 = numpyro.sample(
         "b3",
         dist.Normal(
-            loc=jnp.zeros((H // 4, W // 4)),
-            scale=jnp.ones((H // 4, W // 4)),
+            loc=jnp.zeros((H // 4, W // 4, num_filters[2])),
+            scale=jnp.ones((H // 4, W // 4, num_filters[2])),
         ),
     )
     out_conv3 = nonlin(convolution_fn(out_pool2, W3) + b3)
-    assert out_conv3.shape == (B, H // 4, W // 4)
+    assert out_conv3.shape == (B, H // 4, W // 4, num_filters[2])
     out_pool3 = pooling_fn(out_conv3)
-    assert out_pool3.shape == (B, H // 8, W // 8)
+    assert out_pool3.shape == (B, H // 8, W // 8, num_filters[2])
 
     # Flatten
     b, *_ = out_pool3.shape
     out_flatten = jnp.ravel(out_pool3).reshape(b, -1)
-    assert out_flatten.shape == (B, (H // 8) * (W // 8))
+    assert out_flatten.shape == (B, (H // 8) * (W // 8) * num_filters[-1])
 
     # Dense
     W4 = numpyro.sample(
         "W4",
         dist.Normal(
-            loc=jnp.zeros((9, num_categories)),
-            scale=jnp.ones((9, num_categories)),
+            loc=jnp.zeros((9 * num_filters[-1], num_categories)),
+            scale=jnp.ones((9 * num_filters[-1], num_categories)),
         ),
     )
     b4 = numpyro.sample(
         "b4",
         dist.Normal(
-            loc=jnp.zeros((1, 1)),
-            scale=jnp.ones((1, 1)),
+            loc=jnp.zeros(1),
+            scale=jnp.ones(1),
         ),
     )
     out4 = jnp.matmul(out_flatten, W4) + b4
@@ -210,14 +213,18 @@ svi_result, _, _ = svi.run(random.PRNGKey(0), 12000, X=X_train, y=y_train)
 
 predictive = Predictive(BayesianCNN, guide=guide, num_samples=100, parallel=True)
 
-
+# rng_key = random.PRNGKey(125)
 # kernel = NUTS(BayesianCNN)
 # mcmc = MCMC(
-#     kernel, num_warmup=1000, num_samples=4000, num_chains=2, chain_method="vectorized"
+#     kernel,
+#     num_warmup=1000,
+#     num_samples=4000,
+#     num_chains=1,
+#     chain_method="vectorized",
+#     jit_model_args=True,
 # )
 # mcmc.run(X=X_train, y=y_train, rng_key=rng_key)
 # mcmc.print_summary()
-
 
 # predictive = Predictive(
 #     BayesianCNN, posterior_samples=mcmc.get_samples(), num_samples=100, parallel=True

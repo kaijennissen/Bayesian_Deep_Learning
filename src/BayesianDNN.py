@@ -59,44 +59,19 @@ def BayesianDNN(X, y=None):
     numpyro.sample("y", dist.Normal(loc=mean, scale=scale), obs=y)
 
 
-def BNNCNN(X, y):
-    pass
+N = 30
+X = jnp.asarray(np.random.uniform(-np.pi * 3 / 2, np.pi, size=(N, 1)))
+y = jnp.asarray(2 * np.sin(X) + np.random.normal(loc=0, scale=0.2, size=(N, 1)))
 
-
-# X = jnp.ones((10, 1))
-# y = jnp.ones((10, 1))
-
-
-# rng_key = random.PRNGKey(18)
-
-# normal = dist.Normal(loc=jnp.zeros((2, 1)), scale=1.0)
-
-# W1 = normal.sample(key=rng_key, sample_shape=(3, 4))
-# W2 = normal.sample(key=rng_key, sample_shape=(4, 4))
-# W3 = normal.sample(key=rng_key, sample_shape=(4, 1))
-# out1 = jnp.dot(X, W1)
-# out2 = jnp.dot(out1, W2)
-# out3 = jnp.dot(out2, W3)
-
-
-# predictive = Predictive(BNN, num_samples=1)
-# samp = predictive(rng_key=rng_key, X=X)
-
-
-X = np.random.uniform(-3, 2, size=(100, 1))
-y = 2 * np.sin(X) + np.random.normal(loc=0, scale=0.1, size=(100, 1))
-# y = 0.5 * X + np.random.normal(loc=0, scale=0.2, size=(100, 1))
-# plt.plot(X.ravel(), y.ravel(), "x")
-# plt.show()
 rng_key = random.PRNGKey(125)
 kernel = NUTS(BayesianDNN)
 mcmc = MCMC(
-    kernel, num_warmup=1000, num_samples=4000, num_chains=1, chain_method="sequential"
+    kernel, num_warmup=1000, num_samples=4000, num_chains=2, chain_method="vectorized"
 )
 mcmc.run(X=X, y=y, rng_key=rng_key)
 mcmc.print_summary()
 
-X_test = jnp.linspace(-5, 5, num=1000).reshape((-1, 1))
+X_test = jnp.linspace(-6, 8, num=1000).reshape((-1, 1))
 predictive = Predictive(
     BayesianDNN, posterior_samples=mcmc.get_samples(), num_samples=500, parallel=True
 )
