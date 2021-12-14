@@ -52,6 +52,8 @@ def nonlin(x):
 
 # TODO change axis where the num_filters are calculated
 # TODO keep num_filters
+
+
 @jit
 def convolution_fn(inp, W):
     batch, width_in, height_in, *_ = inp.shape
