@@ -51,4 +51,4 @@ def BayesianDNN(X, y=None):
 
 ![Bayesian Neural Net](./plots/BayesianDNN.jpg)
 
-![Gaussian Process](./plots/GaussianProcess_2021_12_14_16_55.jpg)
+![Gaussian Process](./plots/GaussianProcess_2021_12_14_19_53.jpg)

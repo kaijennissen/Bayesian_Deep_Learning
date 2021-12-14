@@ -28,6 +28,7 @@ def rbf_kernel(X, Z, var, length, noise, jitter=1.0e-6, include_noise=True):
 
     deltaXsq = jnp.power((X - Z) / length, 2.0)
     k = var * jnp.exp(-0.5 * deltaXsq)
+
     if include_noise:
         k += (noise + jitter) * np.eye(X.shape[0])
 
@@ -55,17 +56,17 @@ def local_periodic(X, Z, var, period, length, noise, jitter=1.0e-6, include_nois
         length=length,
         noise=noise,
         jitter=jitter,
-        include_noise=include_noise,
-    )
-    k *= rbf_kernel(
+        include_noise=False,
+    ) * rbf_kernel(
         X=X,
         Z=Z,
         var=1,
         length=length,
         noise=noise,
         jitter=jitter,
-        include_noise=False,
+        include_noise=include_noise,
     )
+
     return k
 
 
@@ -74,17 +75,13 @@ kernel = local_periodic
 
 def GaussianProcess(X, y=None):
     N, _ = X.shape
-    var = numpyro.sample("kernel_var", dist.LogNormal(loc=0.0, scale=5.0))
-    length = numpyro.sample("kernel_length", dist.LogNormal(loc=0.0, scale=5.0))
-    noise = numpyro.sample("kernel_noise", dist.LogNormal(loc=0.0, scale=5.0))
+    var = numpyro.sample("kernel_var", dist.LogNormal(loc=0.0, scale=2.0))
+    length = numpyro.sample("kernel_length", dist.LogNormal(loc=0.0, scale=2.0))
+    noise = numpyro.sample("kernel_noise", dist.LogNormal(loc=0.0, scale=2.0))
     period = numpyro.sample("kernel_period", dist.InverseGamma(2, 1))
     k = numpyro.deterministic(
         "k", kernel(X=X, Z=X.T, var=var, period=period, length=length, noise=noise)
     )
-    # k = numpyro.deterministic(
-    #     "k",
-    #     periodic_kernel(X=X, Z=X.T, period=jnp.pi, var=var, length=length, noise=noise),
-    # )
     numpyro.sample(
         "y", dist.MultivariateNormal(loc=jnp.zeros(N), covariance_matrix=k), obs=y
     )
@@ -92,6 +89,7 @@ def GaussianProcess(X, y=None):
 
 def predict(rng_key, X, Y, X_test, var, period, length, noise):
     # compute kernels between train and test data, etc.
+
     k_pp = kernel(X_test, X_test.T, var, period, length, noise, include_noise=True)
     k_pX = kernel(X_test, X.T, var, period, length, noise, include_noise=False)
     k_XX = kernel(X, X.T, var, period, length, noise, include_noise=True)
@@ -109,14 +107,15 @@ def predict(rng_key, X, Y, X_test, var, period, length, noise):
 
 N = 100
 N_test = 400
-X = jnp.asarray(np.random.uniform(-np.pi * 3 / 2, np.pi * 3 / 2, size=(N, 1)))
-# X1 = jnp.asarray(np.random.uniform(-np.pi * 3 / 2, -np.pi * 1 / 2, size=(N // 2, 1)))
-# X2 = jnp.asarray(np.random.uniform(np.pi * 1 / 2, np.pi * 3 / 2, size=(N // 2, 1)))
-# X = jnp.vstack([X1, X2])
+# X = jnp.asarray(np.random.uniform(-np.pi * 3 / 2, np.pi * 3 / 2, size=(N, 1)))
+X1 = jnp.asarray(np.random.uniform(-np.pi * 3 / 2, -np.pi * 1 / 2, size=(N // 2, 1)))
+X2 = jnp.asarray(np.random.uniform(np.pi * 1 / 2, np.pi * 3 / 2, size=(N // 2, 1)))
+X = jnp.vstack([X1, X2])
 y = (
-    #    0.125 * X
-    +jnp.asarray(np.sin(X * 2) + np.random.normal(loc=0, scale=0.2, size=(N, 1)))
+    0.125 * X
+    + jnp.asarray(np.sin(X * 2) + np.random.normal(loc=0, scale=0.2, size=(N, 1)))
 ).ravel()
+X_test = jnp.linspace(-3 * np.pi, 3 * np.pi, num=N_test).reshape((-1, 1))
 
 # sigma_obs = 0.15
 # X = jnp.linspace(-1, 1, N)
@@ -126,7 +125,6 @@ y = (
 # y /= jnp.std(y)
 # X = X[:, None]
 
-X_test = jnp.linspace(-3 * np.pi, 3 * np.pi, num=N_test).reshape((-1, 1))
 # X_test = jnp.linspace(-1.3, 1.3, N_test)[:, None]
 
 
@@ -165,7 +163,6 @@ vmap_args = (
     samples["kernel_length"],
     samples["kernel_noise"],
 )
-
 means, predictions = vmap(
     lambda rng_key, var, period, length, noise: predict(
         rng_key, X, y, X_test, var, period, length, noise
