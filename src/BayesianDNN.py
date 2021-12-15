@@ -47,7 +47,7 @@ def nonlin(x):
 #     numpyro.sample("y", dist.Normal(loc=activation, scale=scale), obs=y)
 
 
-def BayesianDNN(X, y=None):
+def GaussianBNN(X, y=None):
 
     N, feature_dim = X.shape
     out_dim = 1
@@ -127,7 +127,7 @@ def main(
     X, y, X_test = get_data(N=N)
 
     rng_key, rng_key_predict = random.split(random.PRNGKey(915))
-    kernel = NUTS(BayesianDNN)
+    kernel = NUTS(GaussianBNN)
     mcmc = MCMC(
         kernel,
         num_warmup=num_warmup,
@@ -138,7 +138,7 @@ def main(
     mcmc.run(X=X, y=y, rng_key=rng_key)
 
     predictive = Predictive(
-        BayesianDNN,
+        GaussianBNN,
         posterior_samples=mcmc.get_samples(),
         num_samples=500,
         parallel=True,
