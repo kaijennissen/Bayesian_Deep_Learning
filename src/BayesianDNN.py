@@ -71,7 +71,7 @@ def GaussianBNN(X, y=None):
 
 def get_data(N: int = 30, N_test: int = 1000):
 
-    X = jnp.asarray(np.random.uniform(-np.pi * 3 / 2, np.pi * 3 / 2, size=(N, 1)))
+    X = jnp.asarray(np.random.uniform(-np.pi * 3 / 2, np.pi, size=(N, 1)))
     # X1 = jnp.asarray(
     #     np.random.uniform(-np.pi * 3 / 2, -np.pi * 1 / 2, size=(N // 2, 1))
     # )

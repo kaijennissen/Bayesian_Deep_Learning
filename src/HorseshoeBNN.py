@@ -91,9 +91,7 @@ def HorseshoeBNN(X, y=None):
     prec_obs = numpyro.sample("prec_obs", dist.Gamma(3.0, 1.0))
     scale = 1.0 / jnp.sqrt(prec_obs)
 
-    numpyro.sample(
-        "y", dist.Normal(loc=jnp.squeeze(mean), scale=scale).to_event(1), obs=y
-    )
+    numpyro.sample("y", dist.Normal(loc=mean, scale=scale), obs=y)
 
 
 def HorseshoeBNN2(X, y=None):
@@ -171,9 +169,7 @@ def HorseshoeBNN2(X, y=None):
     prec_obs = numpyro.sample("prec_obs", dist.Gamma(3.0, 1.0))
     scale = 1.0 / jnp.sqrt(prec_obs)
 
-    numpyro.sample(
-        "y", dist.Normal(loc=jnp.squeeze(mean), scale=scale).to_event(1), obs=y
-    )
+    numpyro.sample("y", dist.Normal(loc=mean, scale=scale), obs=y)
 
 
 def get_data(N=50, D_X=3, sigma_obs=0.05, N_test=500):
@@ -181,10 +177,10 @@ def get_data(N=50, D_X=3, sigma_obs=0.05, N_test=500):
     np.random.seed(0)
     X = jnp.linspace(-1, 1, N)
     X = jnp.power(X[:, np.newaxis], jnp.arange(3))
-    W = 0.5 * np.random.randn(D_X)
+    W = 0.5 * np.random.randn(3)
     if D_X > 3:
         W = np.append(W, np.zeros(D_X - 3))
-        X = jnp.hstack([X, np.random.normal((N, D_X - 3))])
+        X = jnp.hstack([X, np.random.normal(size=(N, D_X - 3))])
     Y = jnp.dot(X, W) + 0.5 * jnp.power(0.5 + X[:, 1], 2.0) * jnp.sin(4.0 * X[:, 1])
     Y += sigma_obs * np.random.randn(N)
     Y = Y[:, np.newaxis]
@@ -208,7 +204,7 @@ def make_weights_plot(weights):
     fig, axes = plt.subplots(nrows=d, figsize=(24, 12), sharey=False, sharex=False)
     for i in range(d):
         ax = axes[i]
-        ax.hist(weights_norm[:, i], bins=20)
+        ax.hist(weights_norm[:, i], bins=40, density=True)
     # plt.show()
 
     datetime_str = datetime.now().strftime("%Y_%m_%d_%H_%M")
@@ -218,24 +214,25 @@ def make_weights_plot(weights):
 def make_predictive_plot(X, y, X_test, yhat, y_05, y_95):
 
     fig, ax = plt.subplots(nrows=1, ncols=1)
-    ax.plot(X.ravel(), y.ravel(), "x", color="tab:blue", markersize=5)
-    ax.plot(X_test.ravel(), yhat.ravel(), "tab:orange")
+    ax.plot(X[:, 1].ravel(), y.ravel(), "x", color="tab:blue", markersize=5)
+    ax.plot(X_test[:, 1].ravel(), yhat.ravel(), "tab:orange")
     ax.fill_between(
-        X_test.ravel(), y_05.ravel(), y_95.ravel(), alpha=0.5, color="green"
+        X_test[:, 1].ravel(), y_05.ravel(), y_95.ravel(), alpha=0.5, color="green"
     )
 
     datetime_str = datetime.now().strftime("%Y_%m_%d_%H_%M")
-    plt.savefig(f"plots/BayesianDNN_{datetime_str}.jpg")
+    plt.savefig(f"plots/HorseshoeBNN_{datetime_str}.jpg")
 
 
 def main(
-    N: int = 100, num_warmup: int = 1000, num_samples: int = 4000, num_chains: int = 2
+    N: int = 50, num_warmup: int = 1000, num_samples: int = 4000, num_chains: int = 1
 ):
 
-    X, y, X_test = get_data(N=N, D_X=3)
+    model = HorseshoeBNN2
+    X, y, X_test = get_data(N=N, D_X=10)
 
     rng_key, rng_key_predict = random.split(random.PRNGKey(915))
-    kernel = NUTS(HorseshoeBNN2)
+    kernel = NUTS(model)
     mcmc = MCMC(
         kernel,
         num_warmup=num_warmup,
@@ -248,7 +245,7 @@ def main(
 
     make_weights_plot(jnp.squeeze(samples["W1"]))
     predictive = Predictive(
-        HorseshoeBNN2,
+        model,
         posterior_samples=samples,
         num_samples=500,
         parallel=True,
@@ -257,11 +254,23 @@ def main(
     yhat = jnp.mean(post_samples["y"], axis=0)
 
     y_hpdi = hpdi(post_samples["y"], prob=0.9)
-    y_05 = y_hpdi[0, :, :]
-    y_95 = y_hpdi[1, :, :]
+    y_05 = y_hpdi[0, :]
+    y_95 = y_hpdi[1, :]
 
     make_predictive_plot(X=X, y=y, X_test=X_test, yhat=yhat, y_05=y_05, y_95=y_95)
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-N", "--sample-size", default=50, type=int)
+    parser.add_argument("--num-warmup", default=1000, type=int)
+    parser.add_argument("--num-samples", default=4000, type=int)
+    parser.add_argument("--num-chains", default=1, type=int)
+
+    args = parser.parse_args()
+    main(
+        N=args.sample_size,
+        num_warmup=args.num_warmup,
+        num_samples=args.num_samples,
+        num_chains=args.num_chains,
+    )
