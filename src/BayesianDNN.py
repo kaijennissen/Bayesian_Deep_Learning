@@ -19,34 +19,6 @@ def nonlin(x):
     return jnp.tanh(x)
 
 
-# def BayesianDNN(X, y=None, layer_dims=[4, 4]):
-
-#     N, feature_dim = X.shape
-#     _, out_dim = 1, 1  # y.shape
-#     layer_dims.insert(0, feature_dim)
-#     layer_dims.append(out_dim)
-#     activation = X
-#     weights = [None]*3
-#     bias = [None]*3
-
-#     for i, (m, n) in enumerate(zip(layer_dims[:-1], layer_dims[1:])):
-#         weights[i]=numpyro.sample(
-#                 f"W{i}",
-#                 dist.Normal(
-#                     loc=np.zeros((m, n)),
-#                     scale=np.ones((m, n)),
-#                 ),
-#             )
-
-#         bias[i]=numpyro.sample(f"b{i}", dist.Normal(loc=0.0, scale=1.0))
-#         activation = (jnp.matmul(activation, weights[i])) + bias[i]
-
-#     prec_obs = numpyro.sample("prec_obs", dist.Gamma(3.0, 1.0))
-#     scale = 1.0 / jnp.sqrt(prec_obs)
-
-#     numpyro.sample("y", dist.Normal(loc=activation, scale=scale), obs=y)
-
-
 def GaussianBNN(X, y=None):
 
     N, feature_dim = X.shape
@@ -62,7 +34,9 @@ def GaussianBNN(X, y=None):
             scale=jnp.ones((feature_dim, layer1_dim)),
         ),
     )
-    b1 = numpyro.sample("b1", dist.Normal(loc=0.0, scale=1.0))
+    b1 = numpyro.sample(
+        "b1", dist.Normal(loc=jnp.zeros(layer1_dim), scale=jnp.ones(layer1_dim))
+    )
     out1 = nonlin(jnp.matmul(X, W1)) + b1
 
     # layer 2
@@ -73,7 +47,9 @@ def GaussianBNN(X, y=None):
             scale=jnp.ones((layer1_dim, layer2_dim)),
         ),
     )
-    b2 = numpyro.sample("b2", dist.Normal(loc=0.0, scale=1.0))
+    b2 = numpyro.sample(
+        "b2", dist.Normal(loc=jnp.zeros(layer1_dim), scale=jnp.ones(layer1_dim))
+    )
     out2 = nonlin(jnp.matmul(out1, W2)) + b2
     # output layer
     W3 = numpyro.sample(
@@ -82,7 +58,9 @@ def GaussianBNN(X, y=None):
             loc=jnp.zeros((layer2_dim, out_dim)), scale=jnp.ones((layer2_dim, out_dim))
         ),
     )
-    b3 = numpyro.sample("b3", dist.Normal(loc=0.0, scale=1.0))
+    b3 = numpyro.sample(
+        "b3", dist.Normal(loc=jnp.zeros(out_dim), scale=jnp.ones(out_dim))
+    )
 
     mean = numpyro.deterministic("mean", jnp.matmul(out2, W3) + b3)
     prec_obs = numpyro.sample("prec_obs", dist.Gamma(3.0, 1.0))
@@ -91,20 +69,19 @@ def GaussianBNN(X, y=None):
     numpyro.sample("y", dist.Normal(loc=mean, scale=scale), obs=y)
 
 
-def get_data(N: int = 100):
+def get_data(N: int = 30, N_test: int = 1000):
 
-    # X = jnp.asarray(np.random.uniform(-np.pi * 3 / 2, np.pi * 3 / 2, size=(N, 1)))
-    X1 = jnp.asarray(
-        np.random.uniform(-np.pi * 3 / 2, -np.pi * 1 / 2, size=(N // 2, 1))
-    )
-    X2 = jnp.asarray(np.random.uniform(np.pi * 1 / 2, np.pi * 3 / 2, size=(N // 2, 1)))
-    X = jnp.vstack([X1, X2])
-    y = 0.125 * X + jnp.asarray(
-        2 * np.sin(X * 4) + np.random.normal(loc=0, scale=0.2, size=(N, 1))
-    )
-    X_test = jnp.linspace(-np.pi * 2, 2 * np.pi, num=1000).reshape((-1, 1))
+    X = jnp.asarray(np.random.uniform(-np.pi * 3 / 2, np.pi * 3 / 2, size=(N, 1)))
+    # X1 = jnp.asarray(
+    #     np.random.uniform(-np.pi * 3 / 2, -np.pi * 1 / 2, size=(N // 2, 1))
+    # )
+    # X2 = jnp.asarray(np.random.uniform(np.pi * 1 / 2, np.pi * 3 / 2, size=(N // 2, 1)))
+    # X = jnp.vstack([X1, X2])
+    y = jnp.asarray(np.sin(X) + np.random.normal(loc=0, scale=0.2, size=(N, 1)))
+    X_test = jnp.linspace(-np.pi * 2, 2 * np.pi, num=N_test).reshape((-1, 1))
     # plt.plot(X.ravel(), y.ravel(), "x", color="tab:blue", markersize=5)
     # plt.show()
+    return X, y, X_test
 
 
 def make_plot(X, y, X_test, yhat, y_05, y_95):
@@ -121,7 +98,7 @@ def make_plot(X, y, X_test, yhat, y_05, y_95):
 
 
 def main(
-    N: int = 1000, num_warmup: int = 1000, num_samples: int = 4000, num_chains: int = 2
+    N: int = 30, num_warmup: int = 1000, num_samples: int = 4000, num_chains: int = 2
 ):
 
     X, y, X_test = get_data(N=N)
@@ -154,5 +131,4 @@ def main(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument()
+    main()

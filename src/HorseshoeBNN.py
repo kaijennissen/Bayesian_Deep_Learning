@@ -1,6 +1,7 @@
 import argparse
 import warnings
 from datetime import datetime
+from re import A
 
 from jax._src.numpy.lax_numpy import concatenate
 
@@ -25,6 +26,7 @@ def nonlin(x):
     return jnp.tanh(x)
 
 
+# TODO: inculde priors in Docstring
 def HorseshoeBNN(X, y=None):
 
     N, feature_dim = X.shape
@@ -32,18 +34,23 @@ def HorseshoeBNN(X, y=None):
     layer1_dim = 4
     layer2_dim = 4
 
-    # layer 1
-    lambdas = numpyro.sample(
-        "lambdas", dist.InverseGamma(jnp.ones((feature_dim, 1)) / 2, 2)
+    # local shrinkage params
+    lam = numpyro.sample(
+        "lambdas",
+        dist.InverseGamma(concentration=0.5 * jnp.ones((feature_dim, 1)), rate=0.25),
     )
-    rate_tau = numpyro.deterministic("rate_tau", 1 / lambdas)
+    rate_tau = numpyro.deterministic("rate_tau", 1 / lam)
     tau = numpyro.sample(
-        "tau", dist.InverseGamma(jnp.ones((feature_dim, 1)) / 2, rate_tau)
+        "tau",
+        dist.InverseGamma(
+            concentration=0.5 * jnp.ones((feature_dim, 1)), rate=rate_tau
+        ),
     )
 
-    rho = numpyro.sample("rho", dist.InverseGamma(1 / 2, 2))
-    rate_nu = numpyro.deterministic("rate_tau", 1 / rho)
-    nu = numpyro.sample("nu", dist.InverseGamma(1 / 2, rate_nu))
+    # global shrinkage params
+    mu = numpyro.sample("mu", dist.InverseGamma(concentration=0.5, rate=0.25))
+    rate_nu = numpyro.deterministic("rate_nu", 1 / mu)
+    nu = numpyro.sample("nu", dist.InverseGamma(concentration=0.5, rate=rate_nu))
 
     # direct parametrization
     # tau = numpyro.sample("tau", dist.HalfCauchy(scale=jnp.ones((feature_dim, 1))))
@@ -57,7 +64,7 @@ def HorseshoeBNN(X, y=None):
             scale=scale,
         ),
     )
-    b1 = numpyro.sample("b1", dist.Normal(loc=0.0, scale=1.0))
+    b1 = numpyro.sample("b1", dist.Normal(loc=jnp.zeros(layer1_dim), scale=1.0))
     out1 = nonlin(jnp.matmul(X, W1)) + b1
 
     # layer 2
@@ -68,7 +75,7 @@ def HorseshoeBNN(X, y=None):
             scale=jnp.ones((layer1_dim, layer2_dim)),
         ),
     )
-    b2 = numpyro.sample("b2", dist.Normal(loc=0.0, scale=1.0))
+    b2 = numpyro.sample("b2", dist.Normal(loc=jnp.zeros(layer2_dim), scale=1.0))
     out2 = nonlin(jnp.matmul(out1, W2)) + b2
 
     # output layer
@@ -78,7 +85,7 @@ def HorseshoeBNN(X, y=None):
             loc=jnp.zeros((layer2_dim, out_dim)), scale=jnp.ones((layer2_dim, out_dim))
         ),
     )
-    b3 = numpyro.sample("b3", dist.Normal(loc=0.0, scale=1.0))
+    b3 = numpyro.sample("b3", dist.Normal(loc=jnp.zeros(out_dim), scale=1.0))
 
     mean = numpyro.deterministic("mean", jnp.matmul(out2, W3) + b3)
     prec_obs = numpyro.sample("prec_obs", dist.Gamma(3.0, 1.0))
@@ -89,30 +96,126 @@ def HorseshoeBNN(X, y=None):
     )
 
 
-def get_data(N=50, D_X=3, sigma_obs=0.05, response="continuous"):
-    assert response in ["continuous", "binary"]
-    assert D_X >= 3
+def HorseshoeBNN2(X, y=None):
 
+    N, feature_dim = X.shape
+    out_dim = 1
+    layer1_dim = 4
+    layer2_dim = 4
+
+    # local shrinkage params
+    b0_sq = numpyro.param("b0_sq", 4)
+    alpha = numpyro.sample(
+        "alpha",
+        dist.InverseGamma(
+            concentration=0.5 * jnp.ones((feature_dim, 1)), rate=1 / b0_sq
+        ),
+    )
+    rate_tau = numpyro.deterministic("rate_tau", 1 / alpha)
+    tau = numpyro.sample(
+        "tau",
+        dist.InverseGamma(
+            concentration=0.5 * jnp.ones((feature_dim, 1)), rate=rate_tau
+        ),
+    )
+    tau_sq = numpyro.deterministic("tau_sq", jnp.square(tau))
+
+    # global shrinkage params
+    bg_sq = numpyro.param("bg_sq", 1)
+    mu = numpyro.sample("mu", dist.InverseGamma(concentration=0.5, rate=1 / bg_sq))
+    rate_lam = numpyro.deterministic("rate_lam", 1 / mu)
+    lamb = numpyro.sample("lamb", dist.InverseGamma(concentration=0.5, rate=rate_lam))
+    lamb_sq = numpyro.deterministic("lamb_sq", jnp.square(lamb))
+
+    df = numpyro.param("df", 100)
+    s = numpyro.param("s", 10)
+    a = numpyro.deterministic("a", 0.5 * df)
+    b = numpyro.deterministic("b", 0.5 * (df * s ** 2))
+    c_sq = numpyro.sample("c_sq", dist.InverseGamma(concentration=a, rate=b))
+
+    scale = numpyro.deterministic(
+        "scale", jnp.sqrt((c_sq * tau_sq) / (c_sq + lamb_sq * tau_sq))
+    )
+
+    W1 = numpyro.sample(
+        "W1",
+        dist.Normal(
+            loc=jnp.zeros((feature_dim, layer1_dim)),
+            scale=scale,
+        ),
+    )
+    b1 = numpyro.sample("b1", dist.Normal(loc=jnp.zeros(layer1_dim), scale=1.0))
+    out1 = nonlin(jnp.matmul(X, W1)) + b1
+
+    # layer 2
+    W2 = numpyro.sample(
+        "W2",
+        dist.Normal(
+            loc=jnp.zeros((layer1_dim, layer2_dim)),
+            scale=jnp.ones((layer1_dim, layer2_dim)),
+        ),
+    )
+    b2 = numpyro.sample("b2", dist.Normal(loc=jnp.zeros(layer2_dim), scale=1.0))
+    out2 = nonlin(jnp.matmul(out1, W2)) + b2
+
+    # output layer
+    W3 = numpyro.sample(
+        "out_layer",
+        dist.Normal(
+            loc=jnp.zeros((layer2_dim, out_dim)), scale=jnp.ones((layer2_dim, out_dim))
+        ),
+    )
+    b3 = numpyro.sample("b3", dist.Normal(loc=jnp.zeros(out_dim), scale=1.0))
+
+    mean = numpyro.deterministic("mean", jnp.matmul(out2, W3) + b3)
+    prec_obs = numpyro.sample("prec_obs", dist.Gamma(3.0, 1.0))
+    scale = 1.0 / jnp.sqrt(prec_obs)
+
+    numpyro.sample(
+        "y", dist.Normal(loc=jnp.squeeze(mean), scale=scale).to_event(1), obs=y
+    )
+
+
+def get_data(N=50, D_X=3, sigma_obs=0.05, N_test=500):
+    D_Y = 1  # create 1d outputs
     np.random.seed(0)
-    X = np.random.randn(N, D_X)
-
-    # the response only depends on X_0, X_1, and X_2
-    W = np.array([2.0, -1.0, 0.50])
-    y = jnp.dot(X[:, :3], W)
-    y -= jnp.mean(y)
-
-    if response == "continuous":
-        y += sigma_obs * np.random.randn(N)
-    elif response == "binary":
-        y = np.random.binomial(1, expit(y))
+    X = jnp.linspace(-1, 1, N)
+    X = jnp.power(X[:, np.newaxis], jnp.arange(3))
+    W = 0.5 * np.random.randn(D_X)
+    if D_X > 3:
+        W = np.append(W, np.zeros(D_X - 3))
+        X = jnp.hstack([X, np.random.normal((N, D_X - 3))])
+    Y = jnp.dot(X, W) + 0.5 * jnp.power(0.5 + X[:, 1], 2.0) * jnp.sin(4.0 * X[:, 1])
+    Y += sigma_obs * np.random.randn(N)
+    Y = Y[:, np.newaxis]
+    Y -= jnp.mean(Y)
+    Y /= jnp.std(Y)
 
     assert X.shape == (N, D_X)
-    assert y.shape == (N,)
+    assert Y.shape == (N, D_Y)
 
-    return X, y
+    X_test = jnp.linspace(-1.3, 1.3, N_test)
+    X_test = jnp.power(X_test[:, np.newaxis], jnp.arange(D_X))
+
+    return X, Y, X_test
 
 
-def make_plot(X, y, X_test, yhat, y_05, y_95):
+def make_weights_plot(weights):
+
+    d = weights.shape[1]
+
+    weights_norm = jnp.sum(jnp.square(weights), axis=-1)
+    fig, axes = plt.subplots(nrows=d, figsize=(24, 12), sharey=False, sharex=False)
+    for i in range(d):
+        ax = axes[i]
+        ax.hist(weights_norm[:, i], bins=20)
+    # plt.show()
+
+    datetime_str = datetime.now().strftime("%Y_%m_%d_%H_%M")
+    plt.savefig(f"plots/HorseshoeBNN_weights_{datetime_str}.jpg")
+
+
+def make_predictive_plot(X, y, X_test, yhat, y_05, y_95):
 
     fig, ax = plt.subplots(nrows=1, ncols=1)
     ax.plot(X.ravel(), y.ravel(), "x", color="tab:blue", markersize=5)
@@ -122,17 +225,17 @@ def make_plot(X, y, X_test, yhat, y_05, y_95):
     )
 
     datetime_str = datetime.now().strftime("%Y_%m_%d_%H_%M")
-    plt.savefig(f"plots/HorseshoeBNN_{datetime_str}.jpg")
+    plt.savefig(f"plots/BayesianDNN_{datetime_str}.jpg")
 
 
 def main(
     N: int = 100, num_warmup: int = 1000, num_samples: int = 4000, num_chains: int = 2
 ):
 
-    X, y = get_data(N=N, D_X=5)
+    X, y, X_test = get_data(N=N, D_X=3)
 
     rng_key, rng_key_predict = random.split(random.PRNGKey(915))
-    kernel = NUTS(HorseshoeBNN)
+    kernel = NUTS(HorseshoeBNN2)
     mcmc = MCMC(
         kernel,
         num_warmup=num_warmup,
@@ -143,18 +246,21 @@ def main(
     mcmc.run(X=X, y=y, rng_key=rng_key)
     samples = mcmc.get_samples()
 
-    W1_post = jnp.squeeze(samples["W1"])
-    d = W1_post.shape[1]
+    make_weights_plot(jnp.squeeze(samples["W1"]))
+    predictive = Predictive(
+        HorseshoeBNN2,
+        posterior_samples=samples,
+        num_samples=500,
+        parallel=True,
+    )
+    post_samples = predictive(rng_key=rng_key_predict, X=X_test)
+    yhat = jnp.mean(post_samples["y"], axis=0)
 
-    W1_norm = jnp.sum(jnp.square(W1_post), axis=-1)
-    fig, axes = plt.subplots(nrows=d, figsize=(24, 12), sharey=False, sharex=False)
-    for i in range(d):
-        ax = axes[i]
-        ax.hist(W1_norm[:, i], bins=20)
-    # plt.show()
+    y_hpdi = hpdi(post_samples["y"], prob=0.9)
+    y_05 = y_hpdi[0, :, :]
+    y_95 = y_hpdi[1, :, :]
 
-    datetime_str = datetime.now().strftime("%Y_%m_%d_%H_%M")
-    plt.savefig(f"plots/HorseshoeBNN_{datetime_str}.jpg")
+    make_predictive_plot(X=X, y=y, X_test=X_test, yhat=yhat, y_05=y_05, y_95=y_95)
 
 
 if __name__ == "__main__":
