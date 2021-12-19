@@ -19,25 +19,29 @@ from jax.scipy.sparse.linalg import cg
 
 
 # Step 1: Simple NN
-def get_data(N=50, D_X=3, sigma_obs=0.025, N_test=500):
+def get_data(N=50, D_X=3, sigma_obs=0.05, N_test=500):
     D_Y = 1  # create 1d outputs
     np.random.seed(0)
-    X = jnp.linspace(-1.25, 1, N)
-    X = jnp.power(X[:, np.newaxis], jnp.arange(D_X))
-    W = 0.5 * np.random.randn(D_X)
-    y = jnp.dot(X, W) + 0.5 * jnp.power(0.5 + X[:, 1], 2.0) * jnp.sin(4.0 * X[:, 1])
-    y += sigma_obs + (0.5 * X[:, 1]) ** 2 * np.random.randn(N)
-    y = y[..., None]
+    X = jnp.linspace(-1.5, 1.5, N)
+
+    # X = jnp.power(X[:, np.newaxis], jnp.arange(D_X))
+    # W = 0.5 * np.random.randn(D_X)
+    # y = jnp.dot(X, W) + 0.5 * jnp.power(0.5 + X[:, 1], 2.0) * jnp.sin(4.0 * X[:, 1])
+    y = X ** 3
+
+    y += sigma_obs + (0.5 * X * np.random.randn(N))
+    # y += sigma_obs + (0.5 * X[:, 1]) ** 2 * np.random.randn(N)
+    # y = y[..., None]
     y -= jnp.mean(y)
     y /= jnp.std(y)
 
-    assert X.shape == (N, D_X)
-    assert y.shape == (N, 1)
+    # assert X.shape == (N, D_X)
+    # assert y.shape == (N, 1)
 
-    X_test = jnp.linspace(-1.75, 1.25, N_test)
-    X_test = jnp.power(X_test[:, np.newaxis], jnp.arange(D_X))
+    X_test = jnp.linspace(-2, 2, N_test)
+    # X_test = jnp.power(X_test[:, np.newaxis], jnp.arange(D_X))
 
-    return X, y, X_test
+    return X[:, np.newaxis], y[:, np.newaxis], X_test[:, np.newaxis]
 
 
 def MLP(layer_dims: list):
@@ -136,11 +140,11 @@ def natural_emp_step(params, X, y, learning_rate):
     return loss, params, learning_rate, ngrads
 
 
-def main(N: int = 50):
-    D_X = 4
+def main(N: int = 150):
+    D_X = 3
     # 1 - Predict Mean
     X, y, X_test = get_data(N=N, D_X=D_X)
-    params = MLP([D_X, 4, 8, 4, 1])
+    params = MLP([1, 4, 8, 4, 1])
     epochs = 5000
     learning_rate = 0.1
     loss_fn = mse
@@ -178,7 +182,7 @@ def main(N: int = 50):
 
     # 2 - Probabilistic Prediction, Training with Gradient Descent
     X, y, X_test = get_data(N=N, D_X=D_X)
-    params = MLP([D_X, 4, 8, 16, 8, 4, 2])
+    params = MLP([1, 4, 8, 4, 2])
     epochs = 5000
     loss_fn = nll
     learning_rate = 0.5
@@ -223,7 +227,7 @@ def main(N: int = 50):
 
     # 3 - Probabilistic Prediction, Training with Natural Gradient
     X, y, X_test = get_data(N=N, D_X=D_X)
-    params = MLP([D_X, 4, 8, 16, 8, 4, 2])
+    params = MLP([1, 4, 8, 4, 2])
     epochs = 5000
     learning_rate = 1
     loss_fn = nll
