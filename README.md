@@ -1,5 +1,5 @@
-# Bayesian Deep Learning 
-The intention of this repository is to learn more about Bayesian Deep Learning by building models from scratch. 
+# Bayesian Deep Learning
+The intention of this repository is to learn more about Bayesian Deep Learning by building models from scratch.
 I've choosen to use [jax](https://github.com/google/jax) and [numpyro](https://github.com/pyro-ppl/numpyro) because they provide the necessary tools (`HMC`, `grad`, `jit`) for deep learning and in addition one has the full control over model specification. F.e. it is possible to build a (True) Bayesian Neural Network - HMC/NUTS and not Bayes by Backprob - in only 20 lines of code.
 
 ```python
@@ -48,6 +48,7 @@ def BayesianDNN(X, y=None):
     numpyro.sample("y", dist.Normal(loc=mean, scale=scale), obs=y)
 
 ```
+![Bayesian Neural Net](./plots/BayesianDNN.jpg)
 
 ![Bayesian Neural Net](./plots/BayesianDNN.jpg)
 

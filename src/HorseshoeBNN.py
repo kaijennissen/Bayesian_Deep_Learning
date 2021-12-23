@@ -182,11 +182,16 @@ def get_data(N=50, D_X=3, sigma_obs=0.05, N_test=500):
         W = np.append(W, np.zeros(D_X - 3))
         X = jnp.hstack([X, np.random.normal(size=(N, D_X - 3))])
     Y = jnp.dot(X, W) + 0.5 * jnp.power(0.5 + X[:, 1], 2.0) * jnp.sin(4.0 * X[:, 1])
-    Y += sigma_obs * np.random.randn(N)
+
+    Y += 0.5 * sigma_obs * np.random.randn(N) + 2 * sigma_obs * np.abs(
+        Y.ravel() - np.max(Y)
+    ) * np.random.randn(N)
     Y = Y[:, np.newaxis]
     Y -= jnp.mean(Y)
     Y /= jnp.std(Y)
-
+    # plt.plot(X[:, 1], Y.ravel(), "x")
+    # plt.show()
+    # raise ValueError
     assert X.shape == (N, D_X)
     assert Y.shape == (N, D_Y)
 
