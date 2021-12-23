@@ -139,7 +139,7 @@ def get_data(N: int = 100, N_test: int = 1000):
 
     # X_test = jnp.linspace(-1.3, 1.3, N_test)[:, None]
 
-    df = pd.read_csv("./motor.csv")
+    df = pd.read_csv("./data/motor.csv")
     X = jnp.asarray(df["times"].values[..., None])
     X_test = jnp.asarray(np.linspace(0, 62, N_test)[..., None])
     y = jnp.asarray(df["accel"].values)

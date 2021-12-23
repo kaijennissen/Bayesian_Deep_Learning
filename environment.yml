@@ -1,4 +1,4 @@
-name: BNN 
+name: BNN
 channels:
   - conda-forge
   - defaults
@@ -9,8 +9,8 @@ dependencies:
   - matplotlib
   - seaborn
   - pre-commit
-  - black==21.5b2
-  - isort==5.9.1
+  - black==21.12b0
+  - isort==5.10.1
   - mypy
   - pylama
   - jax

@@ -1,12 +1,12 @@
 # Bayesian Deep Learning
-The intention of this repository is to learn more about Bayesian Deep Learning by building models from scratch.
-I've choosen to use [jax](https://github.com/google/jax) and [numpyro](https://github.com/pyro-ppl/numpyro) because they provide the necessary tools (`HMC`, `grad`, `jit`) for deep learning and in addition one has the full control over model specification. F.e. it is possible to build a (True) Bayesian Neural Network - HMC/NUTS and not Bayes by Backprob - in only 20 lines of code.
+The intention of this repository is to get a better understanding of Bayesian Deep Learning.
+I've choosen to work with [jax](https://github.com/google/jax) and [numpyro](https://github.com/pyro-ppl/numpyro) because they provide the necessary tools (`HMC`, `SVI`, `grad`, `jit`) while, at the same time, they do this without abstractionn as it is the case with Tensorflow or PyTorch. F.e. it is possible to specify a (True) Bayesian Neural Network - HMC/NUTS and not Bayes by Backprob - in only 20 lines of code.
 
 ```python
 def BayesianDNN(X, y=None):
 
     N, feature_dim = X.shape
-    out_dim = 1, 1  # y.shape
+    out_dim = 1, 1
     layer1_dim = 4
     layer2_dim = 4
 
@@ -48,9 +48,13 @@ def BayesianDNN(X, y=None):
     numpyro.sample("y", dist.Normal(loc=mean, scale=scale), obs=y)
 
 ```
-![Bayesian Neural Net](./plots/BayesianDNN.jpg)
 
-![Bayesian Neural Net](./plots/BayesianDNN.jpg)
+## Aleatoric Uncertainty
+Uncertainty in the DGP
+## Epistemic Uncertainty
+Uncertainty due to scarce data
+
+![Bayesian Neural Net](./plots/BayesianDNN_2021_12_16_16_55.jpg)
 
 ![Gaussian Process](./plots/GaussianProcess_2021_12_15_11_18.jpg)
 

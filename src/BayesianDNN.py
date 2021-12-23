@@ -34,9 +34,7 @@ def GaussianBNN(X, y=None):
             scale=jnp.ones((feature_dim, layer1_dim)),
         ),
     )
-    b1 = numpyro.sample(
-        "b1", dist.Normal(loc=jnp.zeros(layer1_dim), scale=jnp.ones(layer1_dim))
-    )
+    b1 = numpyro.sample("b1", dist.Normal(loc=jnp.zeros(layer1_dim), scale=1.0))
     out1 = nonlin(jnp.matmul(X, W1)) + b1
 
     # layer 2
