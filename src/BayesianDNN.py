@@ -62,7 +62,7 @@ def GaussianBNN(X, y=None):
             scale=jnp.ones((feature_dim, layer1_dim)),
         ),
     )
-    b1 = numpyro.sample("b1", dist.Normal(loc=0.0, scale=1.0))
+    b1 = numpyro.sample("b1", dist.Normal(loc=jnp.zeros(layer1_dim), scale=1.0))
     out1 = nonlin(jnp.matmul(X, W1)) + b1
 
     # layer 2
@@ -73,7 +73,7 @@ def GaussianBNN(X, y=None):
             scale=jnp.ones((layer1_dim, layer2_dim)),
         ),
     )
-    b2 = numpyro.sample("b2", dist.Normal(loc=0.0, scale=1.0))
+    b2 = numpyro.sample("b2", dist.Normal(loc=jnp.zeros(layer2_dim), scale=1.0))
     out2 = nonlin(jnp.matmul(out1, W2)) + b2
     # output layer
     W3 = numpyro.sample(
@@ -82,7 +82,7 @@ def GaussianBNN(X, y=None):
             loc=jnp.zeros((layer2_dim, out_dim)), scale=jnp.ones((layer2_dim, out_dim))
         ),
     )
-    b3 = numpyro.sample("b3", dist.Normal(loc=0.0, scale=1.0))
+    b3 = numpyro.sample("b3", dist.Normal(loc=jnp.zeros(out_dim), scale=1.0))
 
     mean = numpyro.deterministic("mean", jnp.matmul(out2, W3) + b3)
     prec_obs = numpyro.sample("prec_obs", dist.Gamma(3.0, 1.0))

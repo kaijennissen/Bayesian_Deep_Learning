@@ -48,8 +48,14 @@ def BayesianDNN(X, y=None):
     numpyro.sample("y", dist.Normal(loc=mean, scale=scale), obs=y)
 
 ```
+Why Bayesian Deep Learning?
 
-![Bayesian Neural Net](./plots/BayesianDNN.jpg)
+## Aleatoric Uncertainty
+Uncertainty in the DGP
+## Epistemic Uncertainty
+Uncertainty due to scarce data
+
+![Bayesian Neural Net](./plots/BayesianDNN_2021_12_16_16_55.jpg)
 
 ![Gaussian Process](./plots/GaussianProcess_2021_12_15_11_18.jpg)
 
