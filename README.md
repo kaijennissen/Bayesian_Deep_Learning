@@ -50,7 +50,13 @@ def BayesianDNN(X, y=None):
 ```
 
 ## Aleatoric Uncertainty
-Uncertainty in the DGP
+#TODO add Two linear functions with different noise
+![Bayesian Neural Net](./plots/MLP1_2021_12_19_10_41.jpg)
+Consider f.e. the following plot where the crosses mark our observations and the orange line are out predictions.
+Then it is obvious, that our predictions around x=0 will be close to the true observation (we are confident in our prediction) while for predictions outside this region our confidence will decline to to the higher noise in our observations.
+
+This confidence can be captured by our model as depicted in the next plot. Here the shaded area denotes the 90%-confidece interval.
+![Bayesian Neural Net](./plots/MLP3_2021_12_19_10_41.jpg)
 ## Epistemic Uncertainty
 Uncertainty due to scarce data
 
