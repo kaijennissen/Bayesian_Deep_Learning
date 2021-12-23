@@ -4,9 +4,8 @@ I've choosen to work with [jax](https://github.com/google/jax) and [numpyro](htt
 
 ```python
 import jax.numpy as jnp
-from numpyro import sample, deterministic, plate
-from numpyro.distributions import Normal, Gamma
-from jax import jit, random
+from numpyro import deterministic, plate, sample
+from numpyro.distributions import Gamma, Normal
 
 
 def BNN(X, y=None):
