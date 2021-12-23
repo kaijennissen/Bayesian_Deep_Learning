@@ -90,11 +90,15 @@ def HorseshoeBNN(X, y=None):
     mean = numpyro.deterministic("mean", jnp.matmul(out2, W3) + b3)
     prec_obs = numpyro.sample("prec_obs", dist.Gamma(3.0, 1.0))
     scale = 1.0 / jnp.sqrt(prec_obs)
+    assert mean.shape == (N, 1)
+    assert scale.shape == ()
+    if y is not None:
+        assert y.shape == (N, 1)
 
     numpyro.sample("y", dist.Normal(loc=mean, scale=scale), obs=y)
 
 
-def HorseshoeBNN2(X, y=None):
+def FinnishHorseshoeBNN(X, y=None):
 
     N, feature_dim = X.shape
     out_dim = 1
@@ -168,7 +172,10 @@ def HorseshoeBNN2(X, y=None):
     mean = numpyro.deterministic("mean", jnp.matmul(out2, W3) + b3)
     prec_obs = numpyro.sample("prec_obs", dist.Gamma(3.0, 1.0))
     scale = 1.0 / jnp.sqrt(prec_obs)
-
+    assert mean.shape == (N, 1)
+    assert scale.shape == ()
+    if y is not None:
+        assert y.shape == (N, 1)
     numpyro.sample("y", dist.Normal(loc=mean, scale=scale), obs=y)
 
 
@@ -233,7 +240,7 @@ def main(
     N: int = 50, num_warmup: int = 1000, num_samples: int = 4000, num_chains: int = 1
 ):
 
-    model = HorseshoeBNN2
+    model = FinnishHorseshoeBNN
     X, y, X_test = get_data(N=N, D_X=10)
 
     rng_key, rng_key_predict = random.split(random.PRNGKey(915))

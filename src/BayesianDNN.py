@@ -1,4 +1,3 @@
-import argparse
 import warnings
 from datetime import datetime
 
@@ -64,7 +63,13 @@ def GaussianBNN(X, y=None):
     prec_obs = numpyro.sample("prec_obs", dist.Gamma(3.0, 1.0))
     scale = 1.0 / jnp.sqrt(prec_obs)
 
-    numpyro.sample("y", dist.Normal(loc=mean, scale=scale), obs=y)
+    assert mean.shape == (N, 1)
+    assert scale.shape == ()
+    if y is not None:
+        assert y.shape == (N, 1)
+
+    with numpyro.plate("data", size=N, dim=-2):
+        numpyro.sample("y", dist.Normal(loc=mean, scale=scale), obs=y)
 
 
 def get_data(N: int = 30, N_test: int = 1000):
