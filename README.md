@@ -36,4 +36,9 @@ def BNN(X, y=None):
         sample("y", Normal(loc=mean, scale=scale), obs=y)
 ```
 
-![Bayesian Neural Net](./plots/BayesianDNN_2021_12_16_16_55.jpg)
+![Bayesian Neural Net](./plots/BayesianDNN_2021_12_28_13_07.jpg)
+
+
+## Reference
+- [Hands-on Bayesian Neural Networks – a Tutorial
+for Deep Learning Users](https://arxiv.org/pdf/2007.06823.pdf) Laurent Valentin Jospin, Hamid Laga, Farid Boussaid, Wray Buntine, Mohammed Bennamoun]

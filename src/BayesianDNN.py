@@ -18,40 +18,6 @@ def nonlin(x):
     return jnp.tanh(x)
 
 
-def BNN(X, y=None):
-
-    N, k = X.shape
-    D_H1 = 4
-    D_H2 = 4
-
-    # layer 1
-    W1 = numpyro.sample(
-        "W1", dist.Normal(loc=jnp.zeros((k, D_H1)), scale=jnp.ones((k, D_H1)))
-    )
-    b1 = numpyro.sample("b1", dist.Normal(loc=jnp.zeros(D_H1), scale=1.0))
-    out1 = nonlin(jnp.matmul(X, W1)) + b1
-
-    # layer 2
-    W2 = numpyro.sample(
-        "W2", dist.Normal(loc=jnp.zeros((D_H1, D_H2)), scale=jnp.ones((D_H1, D_H2)))
-    )
-    b2 = numpyro.sample("b2", dist.Normal(loc=jnp.zeros(D_H2), scale=jnp.ones(D_H2)))
-    out2 = nonlin(jnp.matmul(out1, W2)) + b2
-    # output layer
-    W3 = numpyro.sample(
-        "out_layer",
-        dist.Normal(loc=jnp.zeros((D_H2, 1)), scale=jnp.ones((D_H2, 1))),
-    )
-    b3 = numpyro.sample("b3", dist.Normal(loc=jnp.zeros(1), scale=jnp.ones(1)))
-
-    mean = numpyro.deterministic("mean", jnp.matmul(out2, W3) + b3)
-    prec_obs = numpyro.sample("prec_obs", dist.Gamma(3.0, 1.0))
-    scale = 1.0 / jnp.sqrt(prec_obs)
-
-    with numpyro.plate("data", size=N, dim=-2):
-        numpyro.sample("y", dist.Normal(loc=mean, scale=scale), obs=y)
-
-
 def GaussianBNN(X, y=None):
 
     N, feature_dim = X.shape
@@ -109,33 +75,32 @@ def GaussianBNN(X, y=None):
 def get_data(N: int = 30, N_test: int = 1000):
 
     X = jnp.asarray(np.random.uniform(-np.pi * 3 / 2, np.pi, size=(N, 1)))
-    # X1 = jnp.asarray(
-    #     np.random.uniform(-np.pi * 3 / 2, -np.pi * 1 / 2, size=(N // 2, 1))
-    # )
-    # X2 = jnp.asarray(np.random.uniform(np.pi * 1 / 2, np.pi * 3 / 2, size=(N // 2, 1)))
-    # X = jnp.vstack([X1, X2])
     y = jnp.asarray(np.sin(X) + np.random.normal(loc=0, scale=0.2, size=(N, 1)))
     X_test = jnp.linspace(-np.pi * 2, 2 * np.pi, num=N_test).reshape((-1, 1))
-    # plt.plot(X.ravel(), y.ravel(), "x", color="tab:blue", markersize=5)
-    # plt.show()
     return X, y, X_test
 
 
 def make_plot(X, y, X_test, yhat, y_05, y_95):
 
     fig, ax = plt.subplots(nrows=1, ncols=1)
-    ax.plot(X.ravel(), y.ravel(), "x", color="tab:blue", markersize=5)
-    ax.plot(X_test.ravel(), yhat.ravel(), "tab:orange")
+    ax.plot(X.ravel(), y.ravel(), ".", color="tab:blue", markersize=2, label="Observed")
+    ax.plot(X_test.ravel(), yhat.ravel(), "tab:orange", label="Mean Prediction")
     ax.fill_between(
-        X_test.ravel(), y_05.ravel(), y_95.ravel(), alpha=0.5, color="green"
+        X_test.ravel(),
+        y_05.ravel(),
+        y_95.ravel(),
+        alpha=0.5,
+        color="green",
+        label="90%-HPDI",
     )
+    plt.legend(loc="upper right")
 
     datetime_str = datetime.now().strftime("%Y_%m_%d_%H_%M")
     plt.savefig(f"plots/BayesianDNN_{datetime_str}.jpg")
 
 
 def main(
-    N: int = 30, num_warmup: int = 1000, num_samples: int = 4000, num_chains: int = 2
+    N: int = 50, num_warmup: int = 1000, num_samples: int = 4000, num_chains: int = 2
 ):
 
     X, y, X_test = get_data(N=N)
