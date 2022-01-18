@@ -4,8 +4,11 @@ import flax.linen as nn
 import jax
 import jax.numpy as jnp
 import numpy as np
+import numpyro
+import numpyro.distributions as dist
 import optax
 import pandas as pd
+from numpyro.contrib.module import random_flax_module
 
 train = pd.read_csv("data/train.csv")
 test = pd.read_csv("data/test.csv")
