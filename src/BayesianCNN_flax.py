@@ -48,7 +48,7 @@ def BayesianCNN(X, y=None):
     N, *_ = X.shape
     module = CNN()
     net = random_flax_module(
-        "nn", module, dist.Normal(0.0, 1.0), input_shape=(2, 28, 28, 1)
+        "nn", module, dist.Normal(0.0, 10.0), input_shape=(2, 28, 28, 1)
     )
     # if y is not None:
     #     assert y.shape == (N,)
@@ -78,7 +78,7 @@ if __name__ == "__main__":
     # )
 
     rng_key, rng_key_predict = random.split(random.PRNGKey(915))
-    kernel = NUTS(BayesianCNN)
+    kernel = NUTS(BayesianCNN, max_tree_depth=1)
     mcmc = MCMC(
         kernel,
         num_warmup=1000,

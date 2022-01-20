@@ -1,6 +1,9 @@
 import warnings
 
 warnings.simplefilter("ignore", FutureWarning)
+import pickle
+import time
+
 import flax.linen as nn
 import jax
 import jax.numpy as jnp
@@ -8,20 +11,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import optax
 import pandas as pd
-
-
-# TODO: split into train / test / validation
-def make_dataset(seed: int, num_batches: int, batch_size: int):
-    key = jax.random.PRNGKey(seed)
-    train = pd.read_csv("data/train.csv")
-    test = pd.read_csv("data/test.csv")
-
-    y = train.pop("label").values
-    X = train.values.reshape(-1, 28, 28, 1) / 255
-    for _ in range(num_batches):
-        key, subkey = jax.random.split(key, num=2)
-        idx = jax.random.choice(key=subkey, a=y.shape[0], shape=(batch_size,))
-        yield jnp.asarray(X[idx, ...]), jnp.asarray(y[idx, ...])
 
 
 class CNN(nn.Module):
@@ -66,13 +55,36 @@ def update(params, opt_state, batch):
     return new_params, new_opt_state
 
 
+@jax.jit
+def accuracy(params, x, y):
+    y_hat = jnp.argmax(model.apply(params, x), axis=1)
+    return jnp.mean(y_hat == y)
+
+
 if __name__ == "__main__":
 
-    # TODO: split into train / test / validation datasets
+    with open("data/mnist_train.pickle", "rb") as file:
+        train = pickle.load(file)
+    with open("data/mnist_test.pickle", "rb") as file:
+        test = pickle.load(file)
+
+    x_train, y_train = train["image"] / 255, train["label"]
+    x_test, y_test = test["image"] / 255, test["label"]
+
+    def get_batches(batch_size: int = 100):
+        X = x_train.copy()
+        y = y_train.copy()
+        N = X.shape[0]
+
+        idx = np.arange(N)
+        np.random.shuffle(idx)
+        splits = np.split(idx, N // batch_size)
+        for split in splits:
+            yield X[split, ...], y[split, ...]
+
     learning_rate = 1e-4
-    epochs = 2000
-    train_ds = make_dataset(23, epochs, 1024)
-    valid_ds = make_dataset(3125, epochs, 1024)
+    epochs = 20
+    batch_size = 100
 
     optimizer = optax.adam(learning_rate)
     model = CNN()
@@ -81,36 +93,29 @@ if __name__ == "__main__":
     params = model.init(jax.random.PRNGKey(0), batch)
     opt_state = optimizer.init(params)
 
-    for epoch, batch in enumerate(train_ds):
-        params, opt_state = update(params, opt_state, batch)
+    for epoch in range(1, epochs + 1):
+        start_time = time.time()
+        for batch in get_batches(batch_size):
+            params, opt_state = update(params, opt_state, batch)
+        epoch_time = round(time.time() - start_time, 2)
 
-        if epoch % 100 == 0:
-            val_batch = next(valid_ds)
-            val_loss = loss_fn(params, val_batch)
-            print(f"Validation loss after epoch {epoch}: {val_loss}")
+        train_acc = round(accuracy(params, x_train, y_train), 4)
+        test_acc = round(accuracy(params, x_test, y_test), 4)
+        print(
+            f"Epoch {epoch} in {epoch_time} sec; Training set accuracy: {train_acc}; Test set accuracy: {test_acc}"
+        )
 
-    train = pd.read_csv("data/train.csv")
-    test = pd.read_csv("data/test.csv")
-    y = train.pop("label").values
-    X = train.values.reshape(-1, 28, 28, 1) / 255
-    X_test = test.values.reshape(-1, 28, 28, 1) / 255
-
-    yhat = model.apply(params, X)
-    yhat = jnp.argmax(yhat, axis=-1)
-    acc = jnp.mean(yhat == y.ravel())
-    print(f"Accuraccy: {acc}")
-    # TODO: add plots
-
-    yhat = model.apply(params, X_test)
-    yhat = jnp.argmax(yhat, axis=-1)
-    i = 0
-    imgs = [124, 12, 314, 718, 2, 22, 917, 513, 15]
-    fix, axes = plt.subplots(nrows=3, ncols=3)
-    for i, idx in enumerate(imgs):
-        r = i // 3
-        c = i % 3
-        ax = axes[r, c]
-        ax.imshow(X_test[idx])
-        ax.set_title(f"Pred: {yhat[idx]}")
-        i += 1
-    plt.show()
+    # Plot images
+    # yhat = model.apply(params, X_test)
+    # yhat = jnp.argmax(yhat, axis=-1)
+    # i = 0
+    # imgs = [124, 12, 314, 718, 2, 22, 917, 513, 15]
+    # fix, axes = plt.subplots(nrows=3, ncols=3)
+    # for i, idx in enumerate(imgs):
+    #     r = i // 3
+    #     c = i % 3
+    #     ax = axes[r, c]
+    #     ax.imshow(X_test[idx])
+    #     ax.set_title(f"Pred: {yhat[idx]}")
+    #     i += 1
+    # plt.show()
