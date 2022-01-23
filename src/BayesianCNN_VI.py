@@ -1,6 +1,6 @@
 import pickle
 import time
-from pickletools import optimize
+from copy import deepcopy
 from typing import Callable, Dict, Tuple
 
 import haiku as hk
@@ -9,20 +9,18 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 from jax import random
-from jax.random import PRNGKey
-from matplotlib.transforms import Transform
-from numpy import ndarray
+from jax.example_libraries import optimizers
 
 Dist = Dict[str, jnp.ndarray]
 NUM_CLASSES = 10
-BETA = 0.1
+BETA = 0.001
 
 # https://neptune.ai/blog/bayesian-neural-networks-with-jax
 # https://gitlab.com/awarelab/spin-up-with-variational-bayes/-/blob/master/bayes.py
 
 
-@jax.jit
-def gaussian_kl(mu: jnp.ndarray, logstd: jnp.ndarray) -> jnp.ndarray:
+# @jax.jit
+def gaussian_kl(mu: jnp.ndarray, logvar: jnp.ndarray) -> jnp.ndarray:
     """Computes mean KL between parameterized Gaussian and Normal distributions.
 
     Gaussian parameterized by mu and logvar. Mean over the batch.
@@ -31,31 +29,32 @@ def gaussian_kl(mu: jnp.ndarray, logstd: jnp.ndarray) -> jnp.ndarray:
           https://arxiv.org/abs/1312.6114
     """
 
-    var = jnp.exp(logstd) ** 2
-    logvar = 2 * logstd
+    var = jnp.exp(logvar)
     kl_divergence = jnp.sum(var + mu ** 2 - 1 - logvar) / 2
     kl_divergence /= mu.shape[0]
 
     return kl_divergence
 
 
-@jax.jit
+# @jax.jit
 def softmax_cross_entropy(logits: jnp.ndarray, labels: jnp.ndarray):
     one_hot = jax.nn.one_hot(labels, logits.shape[-1])
-    return -jnp.sum(jax.nn.log_softmax(logits) * one_hot, axis=-1)
+
+    return -jnp.sum(jax.nn.log_softmax(logits) * one_hot)
 
 
-@jax.jit
+# @jax.jit
 def accuracy(logits: jnp.ndarray, labels: jnp.ndarray) -> jnp.ndarray:
     return jnp.argmax(logits, axis=1) == labels
 
 
+@jax.jit
 def sample_params(dist: Dist, key: jax.random.KeyArray) -> jnp.ndarray:
-    def sample_gaussian(mu: jnp.ndarray, logstd: jnp.ndarray) -> jnp.ndarray:
+    def sample_gaussian(mu: jnp.ndarray, logvar: jnp.ndarray) -> jnp.ndarray:
         eps = jax.random.normal(key, shape=mu.shape)
-        return eps * jnp.exp(logstd) + mu
+        return eps * jnp.exp(logvar / 2) + mu
 
-    sample = jax.tree_multimap(sample_gaussian, dist["mu"], dist["logstd"])
+    sample = jax.tree_multimap(sample_gaussian, dist["mu"], dist["logvar"])
     return sample
 
 
@@ -77,7 +76,7 @@ def calc_matrics(
     )
     mean_aprx_evidence = jnp.exp(elbo_ / NUM_CLASSES)
     return {
-        "accuracy": accuracy(probs, labels),
+        "accuracy": jnp.mean(jnp.argmax(probs, axis=1) == labels),
         "elbo": elbo_,
         "log_likelihood": log_likelihood,
         "kl_divergence": kl_divergence,
@@ -92,9 +91,11 @@ def net(images: jnp.ndarray) -> jnp.ndarray:
     mlp = hk.Sequential(
         [
             hk.Flatten(preserve_dims=1),
-            hk.Linear(16, name="linear_1"),
+            hk.Linear(64, name="linear_1"),
             jax.nn.relu,
-            hk.Linear(10, name="linear_2"),
+            hk.Linear(64, name="linear_2"),
+            jax.nn.relu,
+            hk.Linear(10, name="linear_3"),
         ]
     )
     return mlp(images)
@@ -107,17 +108,20 @@ def predict(
     num_samples: int,
     images: jnp.ndarray,
 ):
-    predicts = []
+    probs = []
 
-    for _ in range(num_samples):
+    for i in range(num_samples):
         key, subkey = random.split(key)
         param_sample = sample_params(dist, subkey)
-        predicts.append(net_fn_t.apply(param_sample, images))  # type:ignore
-    stack_probs = jnp.stack(predicts)
+        logits = net_fn_t.apply(param_sample, images)
+        probs.append(jax.nn.softmax(logits))  # type:ignore
+
+    stack_probs = jnp.stack(probs)
     mean, var = jnp.mean(stack_probs, axis=0), jnp.var(stack_probs, axis=0)
     return mean, var
 
 
+@jax.jit
 def elbo(
     dist: Dist,
     # net_fn: hk.Transformed,
@@ -128,12 +132,12 @@ def elbo(
     # sample params from approx. posterior
     params = sample_params(dist=dist, key=key)
     # get predictions from network with sampled params
-    logits = net_fn_t.apply(dist, images)  # type:ignore
+    logits = net_fn_t.apply(params, images)  # type:ignore
     # compute log-likelihood
-    log_likelihood = softmax_cross_entropy(logits, labels)
+    log_likelihood = -softmax_cross_entropy(logits, labels)
     kl_divergence = jax.tree_util.tree_reduce(
         lambda x, y: x + y,
-        jax.tree_util.tree_multimap(gaussian_kl, params["mu"], params["logstd"]),
+        jax.tree_util.tree_multimap(gaussian_kl, dist["mu"], dist["logvar"]),
     )
     elbo_ = log_likelihood - BETA * kl_divergence
     return elbo_, log_likelihood, kl_divergence
@@ -146,23 +150,29 @@ def loss_fn(
     labels: jnp.ndarray,
     key: jax.random.KeyArray,
 ):
-    return -elbo(dist=dist, images=images, labels=labels, key=key)[0]  # net_fn=net_fn,
+    elbo_, *_ = elbo(dist=dist, images=images, labels=labels, key=key)
+    return -elbo_
 
 
+@jax.jit
 def sgd_update(
     dist: Dist,
-    opt_state: optax.OptState,
+    epoch: int,
+    opt_state,
     # net_fn: hk.Transformed,
     images: jnp.ndarray,
     labels: jnp.ndarray,
     key: jax.random.KeyArray,
 ) -> Tuple[Dist, optax.OptState]:
-    # calc loss and update params
-    grads = jax.grad(loss_fn)(dist, images, labels, key)
-    updates, opt_state = optimizer.update(grads, opt_state)
-    # Apply updates to parameters
-    posterior = optax.apply_updates(dist, updates)
-    return posterior, opt_state
+    #     # calc loss and update params
+    #     grads = jax.grad(loss_fn)(opt_state, images, labels, key)
+    #     updates, new_opt_state = optimizer.update(grads, opt_state)
+    #     posterior = optax.apply_updates(params, updates)
+    #     # Apply updates to parameters
+    grads = jax.grad(loss_fn)(get_params(opt_state), images, labels, key)
+    opt_state = opt_update(epoch, grads, opt_state)
+    aprx_posterior = get_params(opt_state)
+    return aprx_posterior, opt_state
 
 
 with open("data/mnist_train.pickle", "rb") as file:
@@ -170,13 +180,8 @@ with open("data/mnist_train.pickle", "rb") as file:
 with open("data/mnist_test.pickle", "rb") as file:
     test = pickle.load(file)
 
-x_train, y_train = train["image"] / 255, train["label"]
-x_test, y_test = test["image"] / 255, test["label"]
-
-
-epochs = 100
-batch_size = 100
-learning_rate = 1e-4
+x_train, y_train = train["image"] / 255, train["label"] * 1.0
+x_test, y_test = test["image"] / 255, test["label"] * 1.0
 
 
 def get_batches(batch_size: int = 100):
@@ -191,78 +196,91 @@ def get_batches(batch_size: int = 100):
         yield X[split, ...], y[split, ...]
 
 
+EPOCHS = 50
+BATCH_SIZE = 100
+LEARNING_RATE = 1e-3
+
 # Initialize Network
 net_fn_t = hk.transform(net)
 net_fn_t = hk.without_apply_rng(net_fn_t)
 
 key = jax.random.PRNGKey(42)
-images = jnp.ones((8, 28, 28, 1))
+images = jnp.zeros((1, 28, 28, 1))
+labels = jnp.ones(1)
 params = net_fn_t.init(key, images)
 
-aprx_posterior = dict(
-    mu=params,
-    logstd=jax.tree_map(lambda x: -7.0 * jnp.ones_like(x), params),
-)
+logvar = jax.tree_map(lambda x: -7.0 * jnp.ones_like(x), params)
+init_posterior = {"mu": params, "logvar": logvar}
 
-optimizer = optax.adam(learning_rate)
-opt_state = optimizer.init(aprx_posterior)
+# TODO replace optax with jax optimizer
+opt_init, opt_update, get_params = optimizers.adam(LEARNING_RATE)
+opt_state = opt_init(init_posterior)
+
+# loss_fn(aprx_posterior, images, labels, key)
+# params = get_params(opt_state)
+# grads = jax.grad(loss_fn)(params, images, labels, key)
+# opt_state = opt_update(0, grads, opt_state)
 
 
-# sanity checks
-key = jax.random.PRNGKey(345)
-images, labels = next(get_batches(20))
-mean, var = predict(
-    dist=aprx_posterior, key=key, num_samples=2, images=images  # net_fn=net_fn_t,
-)
-assert mean.shape == (20, NUM_CLASSES)
-assert var.shape == (20, NUM_CLASSES)
+rng_seq = hk.PRNGSequence(26847)
+aprx_posterior = deepcopy(init_posterior)
+for epoch in range(1, EPOCHS + 1):
+    start_time = time.time()
+    for images, labels in get_batches(BATCH_SIZE):
+        # grads = jax.grad(loss_fn)(get_params(opt_state), images, labels, key)
+        # opt_state = opt_update(epoch, grads, opt_state)
+        # aprx_posterior = get_params(opt_state)
 
-params = sample_params(dist=aprx_posterior, key=key)
-# assert params.shape == (20, NUM_CLASSES)
-grads = jax.grad(loss_fn)(aprx_posterior, images, labels, key)
+        aprx_posterior, opt_state = sgd_update(
+            dist=aprx_posterior,
+            epoch=epoch,
+            opt_state=opt_state,
+            images=images,
+            labels=labels,
+            key=next(rng_seq),
+        )  # type: ignore
 
-# rng_seq = hk.PRNGSequence(2134)
-# for epoch in range(1, epochs + 1):
-#     start_time = time.time()
-#     for labels, images in get_batches(batch_size):
+    epoch_time = round(time.time() - start_time, 2)
+    y_hat_train = jnp.argmax(
+        predict(dist=aprx_posterior, num_samples=20, images=x_train, key=next(rng_seq))[
+            0
+        ],
+        axis=1,
+    )
+    y_hat_test = jnp.argmax(
+        predict(dist=aprx_posterior, num_samples=20, images=x_test, key=next(rng_seq))[
+            0
+        ],
+        axis=1,
+    )
 
-#         aprx_posterior, opt_state = sgd_update(
-#             dist=aprx_posterior,
-#             opt_state=opt_state,
-#             net_fn=net_fn_t,
-#             images=images,
-#             labels=labels,
-#             key=next(rng_seq),
-#         )  # type: ignore
-
-#     epoch_time = round(time.time() - start_time, 2)
-
-#     logits_train = jnp.argmax(
-#         predict(
-#             dist=aprx_posterior,
-#             net_fn=net_fn_t,
-#             num_samples=100,
-#             images=x_train,
-#             key=next(rng_seq),
-#         ),
-#         axsi=1,
-#     )
-#     logits_test = jnp.argmax(
-#         predict(
-#             dist=aprx_posterior,
-#             net_fn=net_fn_t,
-#             num_samples=100,
-#             images=x_test,
-#             key=next(rng_seq),
-#         ),
-#         axsi=1,
-#     )
-#     train_acc = round(accuracy(params, x_train, y_train), 4)
-#     test_acc = round(accuracy(params, x_test, y_test), 4)
-#     print(
-#         f"Epoch {epoch} in {epoch_time} sec; Training set accuracy: {train_acc}; Test set accuracy: {test_acc}"
-#     )
-
+    # train_acc = round(float(np.mean(y_hat_train == y_train)), 4)
+    # test_acc = round(float(jnp.mean(y_hat_test == y_test)), 4)
+    # print(
+    #     f"Epoch {epoch} in {epoch_time} sec; Training set accuracy: {train_acc}; Test set accuracy: {test_acc}"
+    # )
+    if epoch % 10 == 0:
+        train_metrics = calc_matrics(
+            dist=aprx_posterior,
+            images=x_train,
+            labels=y_train,
+            key=next(rng_seq),
+        )
+        test_metrics = calc_matrics(
+            dist=aprx_posterior,
+            images=x_test,
+            labels=y_test,
+            key=next(rng_seq),
+        )
+        print(f"Epoch: {epoch}")
+        print("Training metrics:")
+        for k, v in train_metrics.items():
+            print(f"{k}: {v}")
+        print("\n")
+        print("Test metrics:")
+        for k, v in test_metrics.items():
+            print(f"{k}: {v}")
+        print("\n")
 # # Plot images
 # # yhat = model.apply(params, X_test)
 # # yhat = jnp.argmax(yhat, axis=-1)
