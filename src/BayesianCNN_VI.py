@@ -212,13 +212,10 @@ def sgd_update(
     return aprx_posterior, opt_state
 
 
-with open("data/mnist_train.pickle", "rb") as file:
-    train = pickle.load(file)
-with open("data/mnist_test.pickle", "rb") as file:
-    test = pickle.load(file)
-
-x_train, y_train = train["image"] / 255, train["label"] * 1.0
-x_test, y_test = test["image"] / 255, test["label"] * 1.0
+x_train = np.load("data/mnist_train_labels.npy") / 255
+y_train = np.load("data/mnist_train_images.npy") * 1.0
+x_test = np.load("data/mnist_test_labels.npy") / 255
+y_test = np.load("data/mnist_test_images.npy") * 1.0
 
 
 def get_batches(batch_size: int = 100):
@@ -269,7 +266,7 @@ for epoch in range(1, EPOCHS + 1):
             key=next(rng_seq),  # type: ignore
         )
 
-    if epoch % 10 == 0:
+    if epoch % 5 == 0:
         # train_metrics = calc_matrics(
         #     dist=aprx_posterior,
         #     images=x_train,
@@ -292,8 +289,11 @@ for epoch in range(1, EPOCHS + 1):
             print(f"{k}: {v}")
         print("\n")
 
+    x_test = np.load("data/mnist_c_test_images.npy") / 255
+    y_test = np.load("data/mnist_c_test_labels.npy") * 1.0
 
 # Plot images
+np.random.seed(2093)
 imgs = [np.random.choice(np.where(y_test == i)[0]) for i in range(10)]
 sample_images = x_test[imgs, ...]
 true_labels = y_test[imgs, ...]
@@ -308,7 +308,7 @@ fig, axes = plt.subplots(
     nrows=num_images,
     ncols=2,
     figsize=(14, 14),
-    # gridspec_kw={"width_ratios": [2, 4]},
+    gridspec_kw={"width_ratios": [1, 4]},
 )
 for i in range(sample_images.shape[0]):
     image = sample_images[i]
@@ -330,12 +330,11 @@ for i in range(sample_images.shape[0]):
     bar = ax2.bar(np.arange(10), pct_97p5, color="red")
     bar[int(true_label)].set_color("green")
     ax2.bar(
-        np.arange(10), pct_2p5 - 0.02, color="white", linewidth=1, edgecolor="white"
+        np.arange(10), pct_2p5 - 0.05, color="white", linewidth=1, edgecolor="white"
     )
     ax2.set_xticks(np.arange(10))
     ax2.set_ylim([0, 1])
     ax2.set_ylabel("Probability")
     ax2.set_title("Model estimated probabilities")
 fig.tight_layout()
-# plt.show()
 plt.savefig("plots/MNIST.jpg", dpi=300)
