@@ -64,7 +64,7 @@ def calc_matrics(
     images: jnp.ndarray,
     labels: jnp.ndarray,
     key: jax.random.KeyArray,
-    num_samples: int = 100,
+    num_samples: int = 50,
 ):
     # calc metrics like accuracy etc
     """Calculates metrics."""
@@ -86,19 +86,33 @@ def calc_matrics(
 
 # Functions above are not model dependent, i.e. do not rely on global variables
 
-
+# replace with CNN
 def net(images: jnp.ndarray) -> jnp.ndarray:
-    mlp = hk.Sequential(
+    # mlp = hk.Sequential(
+    #     [
+    #         hk.Flatten(preserve_dims=1),
+    #         hk.Linear(64, name="linear_1"),
+    #         jax.nn.relu,
+    #         hk.Linear(64, name="linear_2"),
+    #         jax.nn.relu,
+    #         hk.Linear(10, name="linear_3"),
+    #     ]
+    # )
+    # return mlp(images)
+    cnn = hk.Sequential(
         [
+            # hk.Flatten(preserve_dims=1),
+            hk.Conv2D(4, kernel_shape=(5, 5), name="conv_1"),
+            jax.nn.relu,
+            hk.Conv2D(8, kernel_shape=(5, 5), name="conv_2"),
+            jax.nn.relu,
             hk.Flatten(preserve_dims=1),
             hk.Linear(64, name="linear_1"),
             jax.nn.relu,
-            hk.Linear(64, name="linear_2"),
-            jax.nn.relu,
-            hk.Linear(10, name="linear_3"),
+            hk.Linear(10, name="output"),
         ]
     )
-    return mlp(images)
+    return cnn(images)
 
 
 def predict(
@@ -196,7 +210,7 @@ def get_batches(batch_size: int = 100):
         yield X[split, ...], y[split, ...]
 
 
-EPOCHS = 50
+EPOCHS = 20
 BATCH_SIZE = 100
 LEARNING_RATE = 1e-3
 
@@ -241,18 +255,19 @@ for epoch in range(1, EPOCHS + 1):
         )  # type: ignore
 
     epoch_time = round(time.time() - start_time, 2)
-    y_hat_train = jnp.argmax(
-        predict(dist=aprx_posterior, num_samples=20, images=x_train, key=next(rng_seq))[
-            0
-        ],
-        axis=1,
-    )
-    y_hat_test = jnp.argmax(
-        predict(dist=aprx_posterior, num_samples=20, images=x_test, key=next(rng_seq))[
-            0
-        ],
-        axis=1,
-    )
+    print(f"epoch {epoch} in {epoch_time}")
+    # y_hat_train = jnp.argmax(
+    #     predict(dist=aprx_posterior, num_samples=20, images=x_train, key=next(rng_seq))[
+    #         0
+    #     ],
+    #     axis=1,
+    # )
+    # y_hat_test = jnp.argmax(
+    #     predict(dist=aprx_posterior, num_samples=20, images=x_test, key=next(rng_seq))[
+    #         0
+    #     ],
+    #     axis=1,
+    # )
 
     # train_acc = round(float(np.mean(y_hat_train == y_train)), 4)
     # test_acc = round(float(jnp.mean(y_hat_test == y_test)), 4)
@@ -260,12 +275,12 @@ for epoch in range(1, EPOCHS + 1):
     #     f"Epoch {epoch} in {epoch_time} sec; Training set accuracy: {train_acc}; Test set accuracy: {test_acc}"
     # )
     if epoch % 10 == 0:
-        train_metrics = calc_matrics(
-            dist=aprx_posterior,
-            images=x_train,
-            labels=y_train,
-            key=next(rng_seq),
-        )
+        # train_metrics = calc_matrics(
+        #     dist=aprx_posterior,
+        #     images=x_train,
+        #     labels=y_train,
+        #     key=next(rng_seq),
+        # )
         test_metrics = calc_matrics(
             dist=aprx_posterior,
             images=x_test,
@@ -273,10 +288,10 @@ for epoch in range(1, EPOCHS + 1):
             key=next(rng_seq),
         )
         print(f"Epoch: {epoch}")
-        print("Training metrics:")
-        for k, v in train_metrics.items():
-            print(f"{k}: {v}")
-        print("\n")
+        # print("Training metrics:")
+        # for k, v in train_metrics.items():
+        #     print(f"{k}: {v}")
+        # print("\n")
         print("Test metrics:")
         for k, v in test_metrics.items():
             print(f"{k}: {v}")
