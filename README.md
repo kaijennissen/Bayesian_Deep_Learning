@@ -1,4 +1,5 @@
 # Bayesian Deep Learning
+
 In this repository I collect some toy examples of Bayesian Deep Learning.
 I've choosen to work with [jax](https://github.com/google/jax) and [numpyro](https://github.com/pyro-ppl/numpyro) because they provide the inference tools (`HMC`, `SVI`) so that I can focus on model specificaton. F.e. it is possible to specify a (True) Bayesian Neural Network - HMC/NUTS and not Bayes by Backprob - in only ~30 lines of code.
 
@@ -38,7 +39,13 @@ def BNN(X, y=None):
 
 ![Bayesian Neural Net](./plots/BayesianDNN_2021_12_28_13_07.jpg)
 
+## MNIST & Corrupted MNIST
+
+Below one can see predictions obtained from a bayesian CNN trained using VI (```src/BayesianCNN_VI.py```).
+Note the uncertainty for the last three images.
+![MNIST](./plots/MNIST.jpg)
 
 ## Reference
+
 - [Hands-on Bayesian Neural Networks – a Tutorial
 for Deep Learning Users](https://arxiv.org/pdf/2007.06823.pdf) Laurent Valentin Jospin, Hamid Laga, Farid Boussaid, Wray Buntine, Mohammed Bennamoun]
