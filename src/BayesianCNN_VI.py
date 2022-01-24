@@ -293,7 +293,7 @@ for epoch in range(1, EPOCHS + 1):
     y_test = np.load("data/mnist_c_test_labels.npy") * 1.0
 
 # Plot images
-np.random.seed(2093)
+np.random.seed(293)
 imgs = [np.random.choice(np.where(y_test == i)[0]) for i in range(10)]
 sample_images = x_test[imgs, ...]
 true_labels = y_test[imgs, ...]
