@@ -6,6 +6,7 @@ from typing import Callable, Dict, Tuple
 import haiku as hk
 import jax
 import jax.numpy as jnp
+import matplotlib.pyplot as plt
 import numpy as np
 import optax
 from jax import random
@@ -122,6 +123,29 @@ def predict(
     num_samples: int,
     images: jnp.ndarray,
 ):
+    # probs = []
+
+    # for i in range(num_samples):
+    #     key, subkey = random.split(key)
+    #     param_sample = sample_params(dist, subkey)
+    #     logits = net_fn_t.apply(param_sample, images)
+    #     probs.append(jax.nn.softmax(logits))  # type:ignore
+
+    # stack_probs = jnp.stack(probs)
+    stacked_probs = predict_probs(
+        dist=dist, key=key, num_samples=num_samples, images=images
+    )
+    mean, var = jnp.mean(stacked_probs, axis=0), jnp.var(stacked_probs, axis=0)
+    return mean, var
+
+
+def predict_probs(
+    dist: Dict,
+    # net_fn: hk.Transformed,
+    key: jax.random.KeyArray,
+    num_samples: int,
+    images: jnp.ndarray,
+):
     probs = []
 
     for i in range(num_samples):
@@ -130,9 +154,8 @@ def predict(
         logits = net_fn_t.apply(param_sample, images)
         probs.append(jax.nn.softmax(logits))  # type:ignore
 
-    stack_probs = jnp.stack(probs)
-    mean, var = jnp.mean(stack_probs, axis=0), jnp.var(stack_probs, axis=0)
-    return mean, var
+    stacked_probs = jnp.stack(probs)
+    return stacked_probs
 
 
 @jax.jit
@@ -230,20 +253,12 @@ init_posterior = {"mu": params, "logvar": logvar}
 opt_init, opt_update, get_params = optimizers.adam(LEARNING_RATE)
 opt_state = opt_init(init_posterior)
 
-# loss_fn(aprx_posterior, images, labels, key)
-# params = get_params(opt_state)
-# grads = jax.grad(loss_fn)(params, images, labels, key)
-# opt_state = opt_update(0, grads, opt_state)
-
 
 rng_seq = hk.PRNGSequence(26847)
 aprx_posterior = deepcopy(init_posterior)
 for epoch in range(1, EPOCHS + 1):
-    start_time = time.time()
+
     for images, labels in get_batches(BATCH_SIZE):
-        # grads = jax.grad(loss_fn)(get_params(opt_state), images, labels, key)
-        # opt_state = opt_update(epoch, grads, opt_state)
-        # aprx_posterior = get_params(opt_state)
 
         aprx_posterior, opt_state = sgd_update(
             dist=aprx_posterior,
@@ -251,29 +266,9 @@ for epoch in range(1, EPOCHS + 1):
             opt_state=opt_state,
             images=images,
             labels=labels,
-            key=next(rng_seq),
-        )  # type: ignore
+            key=next(rng_seq),  # type: ignore
+        )
 
-    epoch_time = round(time.time() - start_time, 2)
-    print(f"epoch {epoch} in {epoch_time}")
-    # y_hat_train = jnp.argmax(
-    #     predict(dist=aprx_posterior, num_samples=20, images=x_train, key=next(rng_seq))[
-    #         0
-    #     ],
-    #     axis=1,
-    # )
-    # y_hat_test = jnp.argmax(
-    #     predict(dist=aprx_posterior, num_samples=20, images=x_test, key=next(rng_seq))[
-    #         0
-    #     ],
-    #     axis=1,
-    # )
-
-    # train_acc = round(float(np.mean(y_hat_train == y_train)), 4)
-    # test_acc = round(float(jnp.mean(y_hat_test == y_test)), 4)
-    # print(
-    #     f"Epoch {epoch} in {epoch_time} sec; Training set accuracy: {train_acc}; Test set accuracy: {test_acc}"
-    # )
     if epoch % 10 == 0:
         # train_metrics = calc_matrics(
         #     dist=aprx_posterior,
@@ -285,7 +280,7 @@ for epoch in range(1, EPOCHS + 1):
             dist=aprx_posterior,
             images=x_test,
             labels=y_test,
-            key=next(rng_seq),
+            key=next(rng_seq),  # type: ignore
         )
         print(f"Epoch: {epoch}")
         # print("Training metrics:")
@@ -296,17 +291,51 @@ for epoch in range(1, EPOCHS + 1):
         for k, v in test_metrics.items():
             print(f"{k}: {v}")
         print("\n")
-# # Plot images
-# # yhat = model.apply(params, X_test)
-# # yhat = jnp.argmax(yhat, axis=-1)
-# # i = 0
-# # imgs = [124, 12, 314, 718, 2, 22, 917, 513, 15]
-# # fix, axes = plt.subplots(nrows=3, ncols=3)
-# # for i, idx in enumerate(imgs):
-# #     r = i // 3
-# #     c = i % 3
-# #     ax = axes[r, c]
-# #     ax.imshow(X_test[idx])
-# #     ax.set_title(f"Pred: {yhat[idx]}")
-# #     i += 1
-# # plt.show()
+
+
+# Plot images
+imgs = [np.random.choice(np.where(y_test == i)[0]) for i in range(10)]
+sample_images = x_test[imgs, ...]
+true_labels = y_test[imgs, ...]
+predicted_probs = predict_probs(
+    dist=aprx_posterior,
+    key=random.PRNGKey(2314),
+    num_samples=100,
+    images=sample_images,
+)
+num_images = len(imgs)
+fig, axes = plt.subplots(
+    nrows=num_images,
+    ncols=2,
+    figsize=(14, 14),
+    # gridspec_kw={"width_ratios": [2, 4]},
+)
+for i in range(sample_images.shape[0]):
+    image = sample_images[i]
+    true_label = true_labels[i]
+    ax1 = axes[i, 0]
+    ax2 = axes[i, 1]
+    # Show the image and the true label
+    ax1.imshow(image[..., 0], cmap="gray")
+    ax1.axis("off")
+    ax1.set_title("True label: {}".format(str(true_label)))
+
+    # Show a 95% prediction interval of model predicted probabilities
+    pct_2p5 = np.array(
+        [np.percentile(predicted_probs[:, i, n], 2.5) for n in range(10)]
+    )
+    pct_97p5 = np.array(
+        [np.percentile(predicted_probs[:, i, n], 97.5) for n in range(10)]
+    )
+    bar = ax2.bar(np.arange(10), pct_97p5, color="red")
+    bar[int(true_label)].set_color("green")
+    ax2.bar(
+        np.arange(10), pct_2p5 - 0.02, color="white", linewidth=1, edgecolor="white"
+    )
+    ax2.set_xticks(np.arange(10))
+    ax2.set_ylim([0, 1])
+    ax2.set_ylabel("Probability")
+    ax2.set_title("Model estimated probabilities")
+fig.tight_layout()
+# plt.show()
+plt.savefig("plots/MNIST.jpg", dpi=300)
