@@ -14,6 +14,7 @@
 *.dat
 *.bin
 # general
+*.npy
 *.csv
 *.CSV
 *.xls
