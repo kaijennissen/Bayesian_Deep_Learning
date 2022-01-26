@@ -30,12 +30,12 @@ def GaussianBNN(X, y=None):
     # layer 1
     W1 = numpyro.sample("W1", dist.Normal(jnp.zeros((feature_dim, layer1_dim)), 1.0))
     b1 = numpyro.sample("b1", dist.Normal(jnp.zeros(layer1_dim), 1.0))
-    out1 = nonlin(jnp.matmul(X, W1)) + b1
+    out1 = nonlin(jnp.matmul(X, W1) + b1)
 
     # layer 2
     W2 = numpyro.sample("W2", dist.Normal(jnp.zeros((layer1_dim, layer2_dim)), 1.0))
     b2 = numpyro.sample("b2", dist.Normal(jnp.zeros(layer1_dim), 1.0))
-    out2 = nonlin(jnp.matmul(out1, W2)) + b2
+    out2 = nonlin(jnp.matmul(out1, W2) + b2)
 
     # output layer
     W3 = numpyro.sample("out_layer", dist.Normal(jnp.zeros((layer2_dim, out_dim)), 1.0))
