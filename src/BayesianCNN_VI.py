@@ -220,10 +220,10 @@ def sgd_update(
 
 
 if __name__ == "__main__":
-    x_train = np.load("data/mnist_c_train_images.npy") / 255
-    y_train = np.load("data/mnist_c_train_labels.npy") * 1.0
-    x_test = np.load("data/mnist_c_test_images.npy") / 255
-    y_test = np.load("data/mnist_c_test_labels.npy") * 1.0
+    x_train = np.load("data/mnist_train_images.npy") / 255
+    y_train = np.load("data/mnist_train_labels.npy") * 1.0
+    x_test = np.load("data/mnist_test_images.npy") / 255
+    y_test = np.load("data/mnist_test_labels.npy") * 1.0
 
     def get_batches(batch_size: int = 100):
         X = x_train.copy()
@@ -237,7 +237,7 @@ if __name__ == "__main__":
             yield X[split, ...], y[split, ...]
 
     EPOCHS = 10
-    BATCH_SIZE = 200
+    BATCH_SIZE = 100
     LEARNING_RATE = 1e-3
 
     # Initialize Network
@@ -295,19 +295,11 @@ if __name__ == "__main__":
             print("\n")
 
     # Plot images
-    # predicted_probs = predict_probs(
-    #     dist=aprx_posterior,
-    #     key=random.PRNGKey(2314),
-    #     num_samples=100,
-    #     images=x_test,
-    # )
-    np.random.seed(293)
-    # y_hat = jnp.argmax(predicted_probs, axis=1)
-    # sample_images = x_test[y_test != y_hat, ...]
-    # sample_labels = y_test[y_test != y_hat]
-    # imgs = [np.random.choice(np.where(sample_labels == i)[0]) for i in range(10)]
+    np.random.seed(223)
+    x_test = np.load("data/mnist_c_test_images.npy") / 255
+    y_test = np.load("data/mnist_c_test_labels.npy") * 1.0
 
-    imgs = [np.random.choice(np.where(y_test == i)[0]) for i in range(10)]
+    imgs = [4542, 652, 9971, 747, 7629, 319, 259, 6609, 9936, 58]
     sample_images = x_test[imgs, ...]
     true_labels = y_test[imgs, ...]
     predicted_probs = predict_probs(
@@ -356,3 +348,35 @@ if __name__ == "__main__":
         ax2.set_title("Model estimated probabilities")
     fig.tight_layout()
     plt.savefig(f"plots/MNIST_C_BCNN.jpg", dpi=300)
+
+    fig, axes = plt.subplots(
+        nrows=num_images,
+        ncols=1,
+        figsize=(4, 12),
+    )
+    for i in range(sample_images.shape[0]):
+        image = sample_images[i]
+        true_label = true_labels[i]
+        ax = axes[i]
+        # Show a 95% prediction interval of model predicted probabilities
+        pct_2p5 = np.array(
+            [np.percentile(predicted_probs[:, i, n], 2.5) for n in range(10)]
+        )
+        pct_97p5 = np.array(
+            [np.percentile(predicted_probs[:, i, n], 97.5) for n in range(10)]
+        )
+        bar = ax.bar(np.arange(10), pct_97p5 + 0.025, color="red")
+        bar[int(true_label)].set_color("green")
+        ax.bar(
+            np.arange(10),
+            pct_2p5 - 0.025,
+            color="white",
+            linewidth=1,
+            edgecolor="white",
+        )
+        ax.set_xticks(np.arange(10))
+        ax.set_ylim([0, 1])
+        ax.set_ylabel("Probability")
+    fig.suptitle("Model estimated probabilities")
+    fig.tight_layout()
+    plt.savefig(f"plots/MNIST_C_BCNN_probs.jpg", dpi=300)

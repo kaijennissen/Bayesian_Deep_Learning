@@ -78,6 +78,7 @@ def predict_probs(params, rng_key, images, num_samples: int = 10):
 
 
 if __name__ == "__main__":
+    MODEL = "CNN_dropout"
 
     x_train = np.load("data/mnist_train_images.npy") / 255
     y_train = np.load("data/mnist_train_labels.npy") * 1.0
@@ -127,10 +128,35 @@ if __name__ == "__main__":
     y_test = np.load("data/mnist_c_test_labels.npy") * 1.0
 
     np.random.seed(293)
-    imgs = [np.random.choice(np.where(y_test == i)[0]) for i in range(10)]
+    # imgs = [np.random.choice(np.where(y_test == i)[0]) for i in range(10)]
+    imgs = [np.where(y_test == i)[0] for i in range(10)]
+    # plt.imshow(x_test[imgs[6][3]]);plt.show()
+    # plt.imshow(x_test[58])
+    # plt.show()
 
+    # 5: 182,319, 6:35
+    imgs = [4542, 652, 9971, 747, 7629, 319, 259, 6609, 9936, 58]
+    # imgs = [np.random.choice(np.where(y_test == i)[0]) for i in range(10)]
+    num_images = len(imgs)
+
+    fig, axes = plt.subplots(
+        nrows=num_images,
+        ncols=1,
+        figsize=(4, 12),
+    )
     sample_images = x_test[imgs, ...]
     true_labels = y_test[imgs, ...]
+    for i in range(sample_images.shape[0]):
+        image = sample_images[i]
+        true_label = true_labels[i]
+        ax1 = axes[i]
+        # Show the image and the true label
+        ax1.imshow(image[..., 0], cmap="gray")
+        ax1.axis("off")
+        ax1.set_title(f"#{imgs[i]}; True label: {str(true_label)}")
+    fig.tight_layout()
+    plt.savefig("plots/MNIST_C_samples.jpg", dpi=300)
+
     predicted_probs = predict_probs(
         params,
         rng_key=jax.random.PRNGKey(2314),
@@ -138,7 +164,6 @@ if __name__ == "__main__":
         num_samples=20,
     )
 
-    num_images = len(imgs)
     fig, axes = plt.subplots(
         nrows=num_images,
         ncols=2,
@@ -176,4 +201,36 @@ if __name__ == "__main__":
         ax2.set_ylabel("Probability")
         ax2.set_title("Model estimated probabilities")
     fig.tight_layout()
-    plt.savefig(f"plots/MNIST_C_CNN.jpg", dpi=300)
+    plt.savefig(f"plots/MNIST_C_{MODEL}.jpg", dpi=300)
+
+    fig, axes = plt.subplots(
+        nrows=num_images,
+        ncols=1,
+        figsize=(4, 12),
+    )
+    for i in range(sample_images.shape[0]):
+        image = sample_images[i]
+        true_label = true_labels[i]
+        ax = axes[i]
+        # Show a 95% prediction interval of model predicted probabilities
+        pct_2p5 = np.array(
+            [np.percentile(predicted_probs[:, i, n], 2.5) for n in range(10)]
+        )
+        pct_97p5 = np.array(
+            [np.percentile(predicted_probs[:, i, n], 97.5) for n in range(10)]
+        )
+        bar = ax.bar(np.arange(10), pct_97p5 + 0.025, color="red")
+        bar[int(true_label)].set_color("green")
+        ax.bar(
+            np.arange(10),
+            pct_2p5 - 0.025,
+            color="white",
+            linewidth=1,
+            edgecolor="white",
+        )
+        ax.set_xticks(np.arange(10))
+        ax.set_ylim([0, 1])
+        ax.set_ylabel("Probability")
+    fig.suptitle("Model estimated probabilities")
+    fig.tight_layout()
+    plt.savefig(f"plots/MNIST_C_{MODEL}_probs.jpg", dpi=300)

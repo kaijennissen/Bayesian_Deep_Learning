@@ -41,7 +41,16 @@ def BNN(X, y=None):
 
 ## MNIST & Corrupted MNIST
 
-![MNIST](./plots/MNIST_C.jpg)
+|                        Images                        |                          CNN                           |                          CNN Ensemble                          |                      Bayesian CNN                       |
+| :--------------------------------------------------: | :----------------------------------------------------: | :------------------------------------------------------------: | :-----------------------------------------------------: |
+| <img src="./plots/MNIST_C_samples.jpg" width="200"/> | <img src="./plots/MNIST_C_CNN_probs.jpg" width="200"/> | <img src="./plots/MNIST_C_CNN_dropout_probs.jpg" width="200"/> | <img src="./plots/MNIST_C_BCNN_probs.jpg" width="200"/> |
+
+<!--
+| <img src="./plots/MNIST_C_samples.jpg" width="200"> | ![MNIST_C_CNN](./plots/MNIST_C_CNN_probs.jpg) | ![MNIST_CNN_dropout](./plots/MNIST_C_CNN_dropout_probs.jpg) | ![MNIST_C_BCNN](./plots/MNIST_C_BCNN_probs.jpg) | -->
+
+<!-- |  |  | ![MNIST_CNN_dropout](./plots/MNIST_C_CNN_dropout_probs.jpg) | ![MNIST_C_BCNN](./plots/MNIST_C_BCNN_probs.jpg) | -->
+
+
 
 ## Reference
 
