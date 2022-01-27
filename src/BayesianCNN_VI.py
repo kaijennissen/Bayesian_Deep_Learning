@@ -295,17 +295,17 @@ if __name__ == "__main__":
             print("\n")
 
     # Plot images
-    predicted_probs = predict_probs(
-        dist=aprx_posterior,
-        key=random.PRNGKey(2314),
-        num_samples=100,
-        images=x_test,
-    )
+    # predicted_probs = predict_probs(
+    #     dist=aprx_posterior,
+    #     key=random.PRNGKey(2314),
+    #     num_samples=100,
+    #     images=x_test,
+    # )
     np.random.seed(293)
-    y_hat = jnp.argmax(predicted_probs, axis=1)
-    sample_images = x_test[y_test != y_hat, ...]
-    sample_labels = y_test[y_test != y_hat]
-    imgs = [np.random.choice(np.where(sample_labels == i)[0]) for i in range(10)]
+    # y_hat = jnp.argmax(predicted_probs, axis=1)
+    # sample_images = x_test[y_test != y_hat, ...]
+    # sample_labels = y_test[y_test != y_hat]
+    # imgs = [np.random.choice(np.where(sample_labels == i)[0]) for i in range(10)]
 
     imgs = [np.random.choice(np.where(y_test == i)[0]) for i in range(10)]
     sample_images = x_test[imgs, ...]
@@ -316,6 +316,7 @@ if __name__ == "__main__":
         num_samples=100,
         images=sample_images,
     )
+
     num_images = len(imgs)
     fig, axes = plt.subplots(
         nrows=num_images,
@@ -340,11 +341,11 @@ if __name__ == "__main__":
         pct_97p5 = np.array(
             [np.percentile(predicted_probs[:, i, n], 97.5) for n in range(10)]
         )
-        bar = ax2.bar(np.arange(10), pct_97p5, color="red")
+        bar = ax2.bar(np.arange(10), pct_97p5 + 0.025, color="red")
         bar[int(true_label)].set_color("green")
         ax2.bar(
             np.arange(10),
-            pct_2p5 - 0.05,
+            pct_2p5 - 0.025,
             color="white",
             linewidth=1,
             edgecolor="white",
