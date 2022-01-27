@@ -41,7 +41,7 @@ def BNN(X, y=None):
 
 ## MNIST & Corrupted MNIST
 
-![MNIST](./plots/MNIST.jpg)
+![MNIST](./plots/MNIST_C.jpg)
 
 ## Reference
 

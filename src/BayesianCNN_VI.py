@@ -89,31 +89,47 @@ def calc_matrics(
 
 # replace with CNN
 def net(images: jnp.ndarray) -> jnp.ndarray:
-    # mlp = hk.Sequential(
-    #     [
-    #         hk.Flatten(preserve_dims=1),
-    #         hk.Linear(64, name="linear_1"),
-    #         jax.nn.relu,
-    #         hk.Linear(64, name="linear_2"),
-    #         jax.nn.relu,
-    #         hk.Linear(10, name="linear_3"),
-    #     ]
-    # )
-    # return mlp(images)
-    cnn = hk.Sequential(
+    mlp = hk.Sequential(
         [
-            # hk.Flatten(preserve_dims=1),
-            hk.Conv2D(4, kernel_shape=(5, 5), name="conv_1"),
-            jax.nn.relu,
-            hk.Conv2D(8, kernel_shape=(5, 5), name="conv_2"),
-            jax.nn.relu,
             hk.Flatten(preserve_dims=1),
             hk.Linear(64, name="linear_1"),
             jax.nn.relu,
-            hk.Linear(10, name="output"),
+            hk.Linear(64, name="linear_2"),
+            jax.nn.relu,
+            hk.Linear(10, name="linear_3"),
         ]
     )
-    return cnn(images)
+    return mlp(images)
+
+
+class CNN(hk.Module):
+    def __init__(self):
+        super().__init__(name="CNN")
+        self.conv1 = hk.Conv2D(output_channels=6, kernel_shape=(5, 5))
+        self.conv2 = hk.Conv2D(output_channels=16, kernel_shape=(5, 5))
+        self.flatten = hk.Flatten()
+        self.linear = hk.Linear(10)
+
+    def __call__(self, x_batch):
+        x = self.conv1(x_batch)
+        # x = hk.max_pool(x, window_shape=(2, 2), strides=1, padding="VALID")
+        x = jax.nn.relu(x)
+        x = self.conv2(x)
+        # x = hk.max_pool(x, window_shape=(2, 2), strides=1, padding="VALID")
+        x = jax.nn.relu(x)
+        x = self.flatten(x)
+        # x = hk.Linear(128)(x)
+        # x = jax.nn.relu(x)
+        x = hk.Linear(64)(x)
+        x = jax.nn.relu(x)
+        x = hk.Linear(10)(x)
+        # x = jax.nn.softmax(x)
+        return x
+
+
+def LeNet(x):
+    cnn = CNN()
+    return cnn(x)
 
 
 def predict(
@@ -123,15 +139,6 @@ def predict(
     num_samples: int,
     images: jnp.ndarray,
 ):
-    # probs = []
-
-    # for i in range(num_samples):
-    #     key, subkey = random.split(key)
-    #     param_sample = sample_params(dist, subkey)
-    #     logits = net_fn_t.apply(param_sample, images)
-    #     probs.append(jax.nn.softmax(logits))  # type:ignore
-
-    # stack_probs = jnp.stack(probs)
     stacked_probs = predict_probs(
         dist=dist, key=key, num_samples=num_samples, images=images
     )
@@ -212,129 +219,139 @@ def sgd_update(
     return aprx_posterior, opt_state
 
 
-x_train = np.load("data/mnist_train_labels.npy") / 255
-y_train = np.load("data/mnist_train_images.npy") * 1.0
-x_test = np.load("data/mnist_test_labels.npy") / 255
-y_test = np.load("data/mnist_test_images.npy") * 1.0
-
-
-def get_batches(batch_size: int = 100):
-    X = x_train.copy()
-    y = y_train.copy()
-    N = X.shape[0]
-
-    idx = np.arange(N)
-    np.random.shuffle(idx)
-    splits = np.split(idx, N // batch_size)
-    for split in splits:
-        yield X[split, ...], y[split, ...]
-
-
-EPOCHS = 20
-BATCH_SIZE = 100
-LEARNING_RATE = 1e-3
-
-# Initialize Network
-net_fn_t = hk.transform(net)
-net_fn_t = hk.without_apply_rng(net_fn_t)
-
-key = jax.random.PRNGKey(42)
-images = jnp.zeros((1, 28, 28, 1))
-labels = jnp.ones(1)
-params = net_fn_t.init(key, images)
-
-logvar = jax.tree_map(lambda x: -7.0 * jnp.ones_like(x), params)
-init_posterior = {"mu": params, "logvar": logvar}
-
-# TODO replace optax with jax optimizer
-opt_init, opt_update, get_params = optimizers.adam(LEARNING_RATE)
-opt_state = opt_init(init_posterior)
-
-
-rng_seq = hk.PRNGSequence(26847)
-aprx_posterior = deepcopy(init_posterior)
-for epoch in range(1, EPOCHS + 1):
-
-    for images, labels in get_batches(BATCH_SIZE):
-
-        aprx_posterior, opt_state = sgd_update(
-            dist=aprx_posterior,
-            epoch=epoch,
-            opt_state=opt_state,
-            images=images,
-            labels=labels,
-            key=next(rng_seq),  # type: ignore
-        )
-
-    if epoch % 5 == 0:
-        # train_metrics = calc_matrics(
-        #     dist=aprx_posterior,
-        #     images=x_train,
-        #     labels=y_train,
-        #     key=next(rng_seq),
-        # )
-        test_metrics = calc_matrics(
-            dist=aprx_posterior,
-            images=x_test,
-            labels=y_test,
-            key=next(rng_seq),  # type: ignore
-        )
-        print(f"Epoch: {epoch}")
-        # print("Training metrics:")
-        # for k, v in train_metrics.items():
-        #     print(f"{k}: {v}")
-        # print("\n")
-        print("Test metrics:")
-        for k, v in test_metrics.items():
-            print(f"{k}: {v}")
-        print("\n")
-
+if __name__ == "__main__":
+    x_train = np.load("data/mnist_c_train_images.npy") / 255
+    y_train = np.load("data/mnist_c_train_labels.npy") * 1.0
     x_test = np.load("data/mnist_c_test_images.npy") / 255
     y_test = np.load("data/mnist_c_test_labels.npy") * 1.0
 
-# Plot images
-np.random.seed(293)
-imgs = [np.random.choice(np.where(y_test == i)[0]) for i in range(10)]
-sample_images = x_test[imgs, ...]
-true_labels = y_test[imgs, ...]
-predicted_probs = predict_probs(
-    dist=aprx_posterior,
-    key=random.PRNGKey(2314),
-    num_samples=100,
-    images=sample_images,
-)
-num_images = len(imgs)
-fig, axes = plt.subplots(
-    nrows=num_images,
-    ncols=2,
-    figsize=(14, 14),
-    gridspec_kw={"width_ratios": [1, 4]},
-)
-for i in range(sample_images.shape[0]):
-    image = sample_images[i]
-    true_label = true_labels[i]
-    ax1 = axes[i, 0]
-    ax2 = axes[i, 1]
-    # Show the image and the true label
-    ax1.imshow(image[..., 0], cmap="gray")
-    ax1.axis("off")
-    ax1.set_title("True label: {}".format(str(true_label)))
+    def get_batches(batch_size: int = 100):
+        X = x_train.copy()
+        y = y_train.copy()
+        N = X.shape[0]
 
-    # Show a 95% prediction interval of model predicted probabilities
-    pct_2p5 = np.array(
-        [np.percentile(predicted_probs[:, i, n], 2.5) for n in range(10)]
+        idx = np.arange(N)
+        np.random.shuffle(idx)
+        splits = np.split(idx, N // batch_size)
+        for split in splits:
+            yield X[split, ...], y[split, ...]
+
+    EPOCHS = 10
+    BATCH_SIZE = 200
+    LEARNING_RATE = 1e-3
+
+    # Initialize Network
+    net_fn_t = hk.transform(LeNet)
+    net_fn_t = hk.without_apply_rng(net_fn_t)
+
+    key = jax.random.PRNGKey(42)
+    images = jnp.zeros((1, 28, 28, 1))
+    labels = jnp.ones(1)
+    params = net_fn_t.init(key, images)
+
+    logvar = jax.tree_map(lambda x: -7.0 * jnp.ones_like(x), params)
+    init_posterior = {"mu": params, "logvar": logvar}
+
+    # TODO replace optax with jax optimizer
+    opt_init, opt_update, get_params = optimizers.adam(LEARNING_RATE)
+    opt_state = opt_init(init_posterior)
+
+    rng_seq = hk.PRNGSequence(2686347)
+    aprx_posterior = deepcopy(init_posterior)
+    for epoch in range(1, EPOCHS + 1):
+
+        for images, labels in get_batches(BATCH_SIZE):
+
+            aprx_posterior, opt_state = sgd_update(
+                dist=aprx_posterior,
+                epoch=epoch,
+                opt_state=opt_state,
+                images=images,
+                labels=labels,
+                key=next(rng_seq),  # type: ignore
+            )
+
+        if epoch % 5 == 0:
+            # train_metrics = calc_matrics(
+            #     dist=aprx_posterior,
+            #     images=x_train,
+            #     labels=y_train,
+            #     key=next(rng_seq),
+            # )
+            test_metrics = calc_matrics(
+                dist=aprx_posterior,
+                images=x_test,
+                labels=y_test,
+                key=next(rng_seq),  # type: ignore
+            )
+            print(f"Epoch: {epoch}")
+            # print("Training metrics:")
+            # for k, v in train_metrics.items():
+            #     print(f"{k}: {v}")
+            # print("\n")
+            print("Test metrics:")
+            for k, v in test_metrics.items():
+                print(f"{k}: {v}")
+            print("\n")
+
+    # Plot images
+    predicted_probs = predict_probs(
+        dist=aprx_posterior,
+        key=random.PRNGKey(2314),
+        num_samples=100,
+        images=x_test,
     )
-    pct_97p5 = np.array(
-        [np.percentile(predicted_probs[:, i, n], 97.5) for n in range(10)]
+    np.random.seed(293)
+    y_hat = jnp.argmax(predicted_probs, axis=1)
+    sample_images = x_test[y_test != y_hat, ...]
+    sample_labels = y_test[y_test != y_hat]
+    imgs = [np.random.choice(np.where(sample_labels == i)[0]) for i in range(10)]
+
+    imgs = [np.random.choice(np.where(y_test == i)[0]) for i in range(10)]
+    sample_images = x_test[imgs, ...]
+    true_labels = y_test[imgs, ...]
+    predicted_probs = predict_probs(
+        dist=aprx_posterior,
+        key=random.PRNGKey(2314),
+        num_samples=100,
+        images=sample_images,
     )
-    bar = ax2.bar(np.arange(10), pct_97p5, color="red")
-    bar[int(true_label)].set_color("green")
-    ax2.bar(
-        np.arange(10), pct_2p5 - 0.05, color="white", linewidth=1, edgecolor="white"
+    num_images = len(imgs)
+    fig, axes = plt.subplots(
+        nrows=num_images,
+        ncols=2,
+        figsize=(14, 14),
+        gridspec_kw={"width_ratios": [1, 4]},
     )
-    ax2.set_xticks(np.arange(10))
-    ax2.set_ylim([0, 1])
-    ax2.set_ylabel("Probability")
-    ax2.set_title("Model estimated probabilities")
-fig.tight_layout()
-plt.savefig("plots/MNIST.jpg", dpi=300)
+    for i in range(sample_images.shape[0]):
+        image = sample_images[i]
+        true_label = true_labels[i]
+        ax1 = axes[i, 0]
+        ax2 = axes[i, 1]
+        # Show the image and the true label
+        ax1.imshow(image[..., 0], cmap="gray")
+        ax1.axis("off")
+        ax1.set_title("True label: {}".format(str(true_label)))
+
+        # Show a 95% prediction interval of model predicted probabilities
+        pct_2p5 = np.array(
+            [np.percentile(predicted_probs[:, i, n], 2.5) for n in range(10)]
+        )
+        pct_97p5 = np.array(
+            [np.percentile(predicted_probs[:, i, n], 97.5) for n in range(10)]
+        )
+        bar = ax2.bar(np.arange(10), pct_97p5, color="red")
+        bar[int(true_label)].set_color("green")
+        ax2.bar(
+            np.arange(10),
+            pct_2p5 - 0.05,
+            color="white",
+            linewidth=1,
+            edgecolor="white",
+        )
+        ax2.set_xticks(np.arange(10))
+        ax2.set_ylim([0, 1])
+        ax2.set_ylabel("Probability")
+        ax2.set_title("Model estimated probabilities")
+    fig.tight_layout()
+    plt.savefig(f"plots/MNIST_C_BCNN.jpg", dpi=300)

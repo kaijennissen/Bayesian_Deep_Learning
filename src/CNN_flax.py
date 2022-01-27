@@ -63,13 +63,10 @@ def accuracy(params, x, y):
 
 if __name__ == "__main__":
 
-    with open("data/mnist_train.pickle", "rb") as file:
-        train = pickle.load(file)
-    with open("data/mnist_test.pickle", "rb") as file:
-        test = pickle.load(file)
-
-    x_train, y_train = train["image"] / 255, train["label"]
-    x_test, y_test = test["image"] / 255, test["label"]
+    x_train = np.load("data/mnist_c_train_images.npy") / 255
+    y_train = np.load("data/mnist_c_train_labels.npy") * 1.0
+    x_test = np.load("data/mnist_c_test_images.npy") / 255
+    y_test = np.load("data/mnist_c_test_labels.npy") * 1.0
 
     def get_batches(batch_size: int = 100):
         X = x_train.copy()
@@ -105,17 +102,56 @@ if __name__ == "__main__":
             f"Epoch {epoch} in {epoch_time} sec; Training set accuracy: {train_acc}; Test set accuracy: {test_acc}"
         )
 
-    # Plot images
-    # yhat = model.apply(params, X_test)
-    # yhat = jnp.argmax(yhat, axis=-1)
-    # i = 0
-    # imgs = [124, 12, 314, 718, 2, 22, 917, 513, 15]
-    # fix, axes = plt.subplots(nrows=3, ncols=3)
-    # for i, idx in enumerate(imgs):
-    #     r = i // 3
-    #     c = i % 3
-    #     ax = axes[r, c]
-    #     ax.imshow(X_test[idx])
-    #     ax.set_title(f"Pred: {yhat[idx]}")
-    #     i += 1
-    # plt.show()
+        np.random.seed(293)
+
+        predicted_probs = jax.nn.softmax(model.apply(params, x_test), axis=1)
+        y_hat = jnp.argmax(predicted_probs, axis=1)
+        sample_images = x_test[y_test != y_hat, ...]
+        sample_labels = y_test[y_test != y_hat]
+
+        imgs = [np.random.choice(np.where(sample_labels == i)[0]) for i in range(10)]
+
+        sample_images = sample_images[imgs, ...]
+        true_labels = sample_labels[imgs, ...]
+        predicted_probs = predicted_probs[imgs, ...]
+
+        num_images = len(imgs)
+        print(imgs)
+        fig, axes = plt.subplots(
+            nrows=num_images,
+            ncols=2,
+            figsize=(14, 14),
+            gridspec_kw={"width_ratios": [1, 4]},
+        )
+        for i in range(sample_images.shape[0]):
+            image = sample_images[i]
+            true_label = true_labels[i]
+            ax1 = axes[i, 0]
+            ax2 = axes[i, 1]
+            # Show the image and the true label
+            ax1.imshow(image[..., 0], cmap="gray")
+            ax1.axis("off")
+            ax1.set_title("True label: {}".format(str(true_label)))
+
+            # Show a 95% prediction interval of model predicted probabilities
+            pct_2p5 = np.array(
+                [np.percentile(predicted_probs[i, n], 2.5) for n in range(10)]
+            )
+            pct_97p5 = np.array(
+                [np.percentile(predicted_probs[i, n], 97.5) for n in range(10)]
+            )
+            bar = ax2.bar(np.arange(10), pct_97p5 + 0.025, color="red")
+            bar[int(true_label)].set_color("green")
+            ax2.bar(
+                np.arange(10),
+                pct_2p5 - 0.025,
+                color="white",
+                linewidth=1,
+                edgecolor="white",
+            )
+            ax2.set_xticks(np.arange(10))
+            ax2.set_ylim([0, 1])
+            ax2.set_ylabel("Probability")
+            ax2.set_title("Model estimated probabilities")
+        fig.tight_layout()
+        plt.savefig(f"plots/MNIST_C_CNN.jpg", dpi=300)
