@@ -18,18 +18,20 @@ def BNN(X, y=None):
     # layer 1
     W1 = sample("W1", Normal(loc=jnp.zeros((k, D_H1)), scale=jnp.ones((k, D_H1))))
     b1 = sample("b1", Normal(loc=jnp.zeros(D_H1), scale=1.0))
-    out1 = jnp.tanh(jnp.matmul(X, W1)) + b1
+    out1 = jnp.tanh(jnp.matmul(X, W1) + b1)
 
     # layer 2
     W2 = sample("W2", Normal(loc=jnp.zeros((D_H1, D_H2)), scale=jnp.ones((D_H1, D_H2))))
     b2 = sample("b2", Normal(loc=jnp.zeros(D_H2), scale=jnp.ones(D_H2)))
-    out2 = jnp.tanh(jnp.matmul(out1, W2)) + b2
+    out2 = jnp.tanh(jnp.matmul(out1, W2) + b2)
 
     # output layer
     W3 = sample("W3", Normal(loc=jnp.zeros((D_H2, 1)), scale=jnp.ones((D_H2, 1))))
     b3 = sample("b3", Normal(loc=jnp.zeros(1), scale=jnp.ones(1)))
+    out3 = jnp.matmul(out2, W3) + b3
 
-    mean = deterministic("mean", jnp.matmul(out2, W3) + b3)
+    mean = deterministic("mean", out3)
+
     prec_obs = sample("prec_obs", Gamma(3.0, 1.0))
     scale = 1.0 / jnp.sqrt(prec_obs)
 
@@ -44,13 +46,6 @@ def BNN(X, y=None):
 |                        Images                        |                          CNN                           |                          CNN Ensemble                          |                      Bayesian CNN                       |
 | :--------------------------------------------------: | :----------------------------------------------------: | :------------------------------------------------------------: | :-----------------------------------------------------: |
 | <img src="./plots/MNIST_C_samples.jpg" width="200"/> | <img src="./plots/MNIST_C_CNN_probs.jpg" width="200"/> | <img src="./plots/MNIST_C_CNN_dropout_probs.jpg" width="200"/> | <img src="./plots/MNIST_C_BCNN_probs.jpg" width="200"/> |
-
-<!--
-| <img src="./plots/MNIST_C_samples.jpg" width="200"> | ![MNIST_C_CNN](./plots/MNIST_C_CNN_probs.jpg) | ![MNIST_CNN_dropout](./plots/MNIST_C_CNN_dropout_probs.jpg) | ![MNIST_C_BCNN](./plots/MNIST_C_BCNN_probs.jpg) | -->
-
-<!-- |  |  | ![MNIST_CNN_dropout](./plots/MNIST_C_CNN_dropout_probs.jpg) | ![MNIST_C_BCNN](./plots/MNIST_C_BCNN_probs.jpg) | -->
-
-
 
 ## Reference
 
