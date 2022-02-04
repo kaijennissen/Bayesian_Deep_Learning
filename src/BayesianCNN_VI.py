@@ -31,7 +31,7 @@ def gaussian_kl(mu: jnp.ndarray, logvar: jnp.ndarray) -> jnp.ndarray:
     """
 
     var = jnp.exp(logvar)
-    kl_divergence = jnp.sum(var + mu ** 2 - 1 - logvar) / 2
+    kl_divergence = jnp.sum(var + mu**2 - 1 - logvar) / 2
     kl_divergence /= mu.shape[0]
 
     return kl_divergence

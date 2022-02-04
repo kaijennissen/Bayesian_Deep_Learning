@@ -132,7 +132,7 @@ def FinnishHorseshoeBNN(X, y=None):
     df = numpyro.param("df", 100)
     s = numpyro.param("s", 10)
     a = numpyro.deterministic("a", 0.5 * df)
-    b = numpyro.deterministic("b", 0.5 * (df * s ** 2))
+    b = numpyro.deterministic("b", 0.5 * (df * s**2))
     c_sq = numpyro.sample("c_sq", dist.InverseGamma(concentration=a, rate=b))
 
     scale = numpyro.deterministic(

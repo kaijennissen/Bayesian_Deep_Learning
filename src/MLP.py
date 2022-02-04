@@ -27,7 +27,7 @@ def get_data(N=50, D_X=3, sigma_obs=0.05, N_test=500):
     # X = jnp.power(X[:, np.newaxis], jnp.arange(D_X))
     # W = 0.5 * np.random.randn(D_X)
     # y = jnp.dot(X, W) + 0.5 * jnp.power(0.5 + X[:, 1], 2.0) * jnp.sin(4.0 * X[:, 1])
-    y = X ** 3
+    y = X**3
 
     y += sigma_obs + (0.5 * X * np.random.randn(N))
     # y += sigma_obs + (0.5 * X[:, 1]) ** 2 * np.random.randn(N)
@@ -133,7 +133,7 @@ def natural_emp_step(params, X, y, learning_rate):
 
     if nll(params_new, X, y) < loss:
         params = params_new
-        learning_rate = learning_rate ** 0.5
+        learning_rate = learning_rate**0.5
     else:
         learning_rate = 0.1 * learning_rate
 
@@ -163,7 +163,7 @@ def main(N: int = 150):
 
         if loss_fn(params_new, X, y) < loss:
             params = params_new
-            learning_rate = learning_rate ** 0.5
+            learning_rate = learning_rate**0.5
         else:
             learning_rate = 0.1 * learning_rate
 
@@ -201,7 +201,7 @@ def main(N: int = 150):
 
         if loss_fn(params_new, X, y) < loss:
             params = params_new
-            learning_rate = learning_rate ** 0.5
+            learning_rate = learning_rate**0.5
         else:
             learning_rate = 0.1 * learning_rate
 
@@ -248,7 +248,7 @@ def main(N: int = 150):
         loss, params_new = update(params, learning_rate, X, y)
         if loss_fn(params_new, X, y) < loss:
             params = params_new
-            learning_rate = learning_rate ** 0.5
+            learning_rate = learning_rate**0.5
         else:
             learning_rate = 0.1 * learning_rate
 

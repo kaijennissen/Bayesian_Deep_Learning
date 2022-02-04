@@ -21,11 +21,11 @@ def rosenbrock(x, a, b):
 
 
 def rosenbrock2D(x, y, a, b):
-    return (a - x) ** 2 + b * (y - x ** 2) ** 2
+    return (a - x) ** 2 + b * (y - x**2) ** 2
 
 
 def himmelblau(x, y):
-    return (x ** 2 + y - 11) ** 2 + (x + y ** 2 - 7) ** 2
+    return (x**2 + y - 11) ** 2 + (x + y**2 - 7) ** 2
 
 
 def himmelblau2D(x):
@@ -99,7 +99,7 @@ for epoch in range(epochs):
     x_new = update2(x, learning_rate)
     if g(x_new) < g(x):
         x = x_new
-        learning_rate = learning_rate ** 0.5
+        learning_rate = learning_rate**0.5
     else:
         learning_rate = 0.1 * learning_rate
     xes[epoch + 1, :] = x

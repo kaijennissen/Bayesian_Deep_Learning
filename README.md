@@ -39,7 +39,7 @@ def BNN(X, y=None):
         sample("y", Normal(loc=mean, scale=scale), obs=y)
 ```
 
-![Bayesian Neural Net](./plots/BayesianDNN_2021_12_28_13_07.jpg)
+![Bayesian Neural Net](./plots/BayesianDNN.jpg)
 
 ## MNIST & Corrupted MNIST
 
