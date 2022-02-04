@@ -7,6 +7,9 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 import numpyro
+
+numpyro.set_host_device_count(2)
+
 import numpyro.distributions as dist
 from flax import linen as nn
 from jax import jit, random
@@ -48,10 +51,9 @@ def GaussianBNN(X, y=None):
     assert mean.shape == (N, 1)
     assert scale.shape == ()
     if y is not None:
-        assert y.shape == (N, 1)
+        assert y.shape == (N,)
 
-    with numpyro.plate("data", size=N, dim=-2):
-        numpyro.sample("y", dist.Normal(loc=mean, scale=scale), obs=y)
+    numpyro.sample("y", dist.Normal(loc=jnp.squeeze(mean), scale=scale), obs=y)
 
 
 class DNN(nn.Module):
@@ -60,18 +62,18 @@ class DNN(nn.Module):
 
     @nn.compact
     def __call__(self, x):
-        x = nn.Dense(self.n_units)(x[..., jnp.newaxis])
-        x = nn.relu(x)
         x = nn.Dense(self.n_units)(x)
-        x = nn.relu(x)
+        x = nn.tanh(x)
+        x = nn.Dense(self.n_units)(x)
+        x = nn.tanh(x)
         mean = nn.Dense(1)(x)
         return mean.squeeze()
 
 
 def FlaxDNN(X, y=None):
-    N, *_ = X.shape
+    N, k = X.shape
     module = DNN(4)
-    net = random_flax_module("nn", module, dist.Normal(0.0, 1.0), input_shape=())
+    net = random_flax_module("nn", module, dist.Normal(0.0, 1.0), input_shape=(1, k))
 
     mean = net(X)
 
@@ -85,12 +87,12 @@ def FlaxDNN(X, y=None):
     numpyro.sample("y", dist.Normal(mean, scale), obs=y)
 
 
-def get_data(N: int = 30, N_test: int = 1000):
-    np.random.seed(341)
-    X = jnp.asarray(np.random.uniform(-np.pi * 3 / 2, np.pi, size=(N, 1)))
-    y = jnp.asarray(np.sin(X) + np.random.normal(loc=0, scale=0.2, size=(N, 1)))
-    X_test = jnp.linspace(-np.pi * 2, 2 * np.pi, num=N_test).reshape((-1, 1))
-    return X.ravel(), y.ravel(), X_test.ravel()
+def get_data(N: int = 50, N_test: int = 1000):
+    np.random.seed(333)
+    X = jnp.asarray(np.random.uniform(-np.pi * 3 / 2, np.pi, size=(N,)))
+    y = jnp.asarray(np.sin(X) + np.random.normal(loc=0, scale=0.2, size=(N,)))
+    X_test = jnp.linspace(-np.pi * 2, 2 * np.pi, num=N_test)
+    return X[:, np.newaxis], y, X_test[:, np.newaxis]
 
 
 def make_plot(X, y, X_test, yhat, y_05, y_95):
@@ -117,7 +119,8 @@ def main(
 ):
 
     X, y, X_test = get_data(N=N)
-    model = FlaxDNN
+
+    model = GaussianBNN
     rng_key, rng_key_predict = random.split(random.PRNGKey(915))
     kernel = NUTS(model)
     mcmc = MCMC(
@@ -125,9 +128,10 @@ def main(
         num_warmup=num_warmup,
         num_samples=num_samples,
         num_chains=num_chains,
-        chain_method="vectorized",
+        chain_method="parallel",
     )
     mcmc.run(X=X, y=y, rng_key=rng_key)
+    mcmc.print_summary()
 
     predictive = Predictive(
         model,

@@ -5,15 +5,20 @@ channels:
 dependencies:
   - python~=3.8.0
   - numpy
+  - arviz
+  - ipykernel
   - pandas
   - matplotlib
   - seaborn
   - pre-commit
-  - black==21.12b0
-  - isort==5.10.1
+  - black
+  - isort
   - mypy
   - pylama
   - jax
   - numpyro
   - pip
-    #- pip:
+  - pip:
+      - flax
+      - blackjax
+      - optax
