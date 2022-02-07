@@ -9,10 +9,42 @@ from optax import scale
 
 class MatrixNormal(Distribution):
     def __init__(self, loc, scale_columns_tril, scale_rows_tril):
-        super(MatrixNormal, self).__init__()
+        if not (loc.ndim == scale_columns.ndim == scale_rows.ndim):
+            raise ValueError(
+                "ndim of loc, scale_columns and scale_rows are reuqired to be equal."
+            )
+        event_shape = loc.shape[-2:]
+        n, p = event_shape
+        batch_shape = loc.shape[:-2]
+
+        super(MatrixNormal, self).__init__(
+            batch_shape=batch_shape, event_shape=event_shape
+        )
+
+        self.loc = loc
+        triu_U = jsp.linalg.cholesky(scale_columns, lower=False)
+        self.triu_U = triu_U
+        assert triu_U.shape == batch_shape + (p, p)
+        tril_V = jsp.linalg.cholesky(scale_rows, lower=True)
+        self.tril_V = tril_V
+        assert tril_V.shape == batch_shape + (n, n)
 
     def sample(self, key, sample_shape=()):
-        pass
+
+        X = random.normal(key, shape=sample_shape + batch_shape + event_shape)
+        assert X.shape == sample_shape + self.batch_shape + self.event_shape
+
+        # X.shape = (n,p) & x_{i,j} ~ N(0,1) -> Y ~ MN(loc,tril_V@tril_V' , triu_U'@triu_U)
+        # with Y = loc + tril_V @ X @ triu_U (https://en.wikipedia.org/wiki/Matrix_normal_distribution)
+        # X.ndim=4 > tril_U.ndim=triu_U.ndim=3
+        # Step 1: use vmap to map matrix multiplicaton along batch and then along sampels
+        batch_map = jax.vmap(lambda x, y, z: x @ y @ z, in_axes=0, out_axes=0)
+        # assert batch_map(tril_V, X[0, ...], triu_U).shape == batch_shape + event_shape
+        sample_map = jax.vmap(lambda x: batch_map(self.tril_V, x, self.triu_U))
+        Y = sample_map(X)
+        assert Y.shape == sample_shape + self.batch_shape + self.event_shape
+
+        return Y
 
     def log_prob(self, value):
         pass
@@ -87,7 +119,7 @@ def sample2(rng_key, loc, scale_rows, scale_columns, sample_shape=()):
     # X.ndim=4 > tril_U.ndim=triu_U.ndim=3
     # Step 1: use vmap to map matrix multiplicaton along batch and then along sampels
     batch_map = jax.vmap(lambda x, y, z: x @ y @ z, in_axes=0, out_axes=0)
-    assert batch_map(tril_V, X[0, ...], triu_U).shape == batch_shape + event_shape
+    # assert batch_map(tril_V, X[0, ...], triu_U).shape == batch_shape + event_shape
     sample_map = jax.vmap(lambda x: batch_map(tril_V, x, triu_U))
     Y = sample_map(X)
     assert Y.shape == sample_shape + batch_shape + event_shape
@@ -95,9 +127,57 @@ def sample2(rng_key, loc, scale_rows, scale_columns, sample_shape=()):
     return Y
 
 
+# Test 1:
+A = jnp.ones((4, 1, 2, 2))
+B = jnp.ones((2, 4))
+C = jax.vmap(lambda x: x @ B)(A)
+assert C.shape == (4, 1, 2, 4)
+assert jnp.allclose(C, jnp.ones((4, 1, 2, 4)) * 2)
+
+# Test 2:
+A = jnp.arange(16).reshape((4, 1, 2, 2))
+B = jnp.ones((2, 4))
+C = jax.vmap(lambda x: x @ B)(A)
+C_expected = jnp.array(
+    [
+        [[[1], [5]]],
+        [[[9], [13]]],
+        [[[17], [21]]],
+        [[[25], [29]]],
+    ]
+) * jnp.ones((1, 1, 1, 4))
+assert C.shape == (4, 1, 2, 4)
+assert jnp.allclose(C, C_expected)
+
+
+# loop
+
+
 # Test 2:
 sample_shape = (10,)
-batch_shape = (2,)
+batch_shape = (2,)  # type: ignore
+event_shape = (2, 3)
+
+rng_key = random.PRNGKey(435)
+
+
+loc = jnp.arange(6).reshape(event_shape) * jnp.ones(batch_shape + (1, 1))
+assert loc.shape == batch_shape + event_shape
+
+tril_U = jnp.array([[1.0, 0, 0], [4.0, 1.0, 0], [0.4, 2.25, 1.0]])
+scale_columns = jnp.matmul(tril_U, tril_U.T) * jnp.ones(batch_shape + (1, 1))
+assert scale_columns.shape == batch_shape + (event_shape[1], event_shape[1])
+
+tril_V = jnp.array([[4.0, 0.0], [1, 0.25]])
+scale_rows = jnp.matmul(tril_V, tril_V.T) * jnp.ones(batch_shape + (1, 1))
+assert scale_rows.shape == batch_shape + (event_shape[0], event_shape[0])
+
+Y = sample2(rng_key, loc, scale_rows, scale_columns, sample_shape=sample_shape)
+assert Y.shape == sample_shape + batch_shape + event_shape
+
+# Test 3:
+sample_shape = (10,)  # type: ignore
+batch_shape = (2, 5, 2)  # type: ignore
 event_shape = (2, 3)
 
 rng_key = random.PRNGKey(435)
@@ -118,10 +198,17 @@ Y = sample2(rng_key, loc, scale_rows, scale_columns, sample_shape=sample_shape)
 assert Y.shape == sample_shape + batch_shape + event_shape
 
 
-for r in range(Y.shape[1]):
-    for c in range(Y.shape[2]):
-        true_cov = scale_rows[r, r] * scale_columns[c, c]
-        print(f"Sample cov: {jnp.cov(Y[:,r,c])}; True cov: {true_cov}")
+sample_shape = (1_000,)
+Y = sample2(
+    jax.random.PRNGKey(125), loc, scale_rows, scale_columns, sample_shape=sample_shape
+)
+assert Y.shape == sample_shape + batch_shape + event_shape
+
+# for r in range(Y.shape[1]):
+#     for c in range(Y.shape[2]):
+#         true_cov = scale_rows[r, r] * scale_columns[c, c]
+#         print(f"Sample cov: {jnp.cov(Y[:,r,c])}; True cov: {true_cov}")
+
 
 # sample_shape=(s,), batch_shape=(),
 def log_prob1(x, loc, scale_rows, scale_columns):
@@ -129,7 +216,6 @@ def log_prob1(x, loc, scale_rows, scale_columns):
     n, p = event_shape
     k = n * p
     batch_shape = loc.shape[:-2]
-
     new_shape = (-1,) + batch_shape + (k,)
     loc_mvn = loc.reshape(new_shape)
 
@@ -141,7 +227,11 @@ def log_prob1(x, loc, scale_rows, scale_columns):
     # If (x) is the Kronecker-Product then it holds that
     # (A (x) B) @ (C (x) D) =(A @ C) (x) (B @ D)
     # see (KRON 13 - https://www.math.uwaterloo.ca/~hwolkowi/henry/reports/kronthesisschaecke04.pdf)
-    tril_scale = jax.vmap(lambda x, y: jnp.kron(x, y))(tril_U, tril_V)
+
+    if batch_shape == ():
+        tril_scale = jnp.kron(tril_U, tril_V)
+    else:
+        tril_scale = jax.vmap(lambda x, y: jnp.kron(x, y))(tril_U, tril_V)
     assert tril_scale.shape == batch_shape + (k, k)
     # mvn = dist.MultivariateNormal(loc=loc_mvn, scale_tril=tril_scale)
     mvn = dist.MultivariateNormal(
@@ -179,7 +269,33 @@ assert x_log_prob.shape == sample_shape + batch_shape
 
 # Test 4:
 sample_shape = (10,)
-batch_shape = (2,)
+batch_shape = (2,)  # type: ignore
+event_shape = (2, 3)
+
+rng_key = random.PRNGKey(435)
+
+
+loc = jnp.arange(6).reshape(event_shape) * jnp.ones(batch_shape + (1, 1))
+assert loc.shape == batch_shape + event_shape
+
+tril_U = jnp.array([[1.0, 0, 0], [4.0, 1.0, 0], [0.4, 2.25, 1.0]])
+scale_columns = jnp.matmul(tril_U, tril_U.T) * jnp.ones(batch_shape + (1, 1))
+assert scale_columns.shape == batch_shape + (event_shape[1], event_shape[1])
+
+tril_V = jnp.array([[4.0, 0.0], [1, 0.25]])
+scale_rows = jnp.matmul(tril_V, tril_V.T) * jnp.ones(batch_shape + (1, 1))
+assert scale_rows.shape == batch_shape + (event_shape[0], event_shape[0])
+
+Y = sample2(rng_key, loc, scale_rows, scale_columns, sample_shape=sample_shape)
+assert Y.shape == sample_shape + batch_shape + event_shape
+
+x_log_prob = log_prob1(Y, loc, scale_rows, scale_columns)
+assert x_log_prob.shape == sample_shape + batch_shape
+
+
+# Test 3:
+sample_shape = (10,)  # type: ignore
+batch_shape = (2, 5)  # type: ignore
 event_shape = (2, 3)
 
 rng_key = random.PRNGKey(435)
