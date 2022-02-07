@@ -32,7 +32,7 @@ def BNN(X, y=None):
 
     mean = deterministic("mean", out3)
 
-    prec_obs = sample("prec_obs", Gamma(3.0, 1.0))
+    prec_obs = sample("prec_obs", Gamma(0.3, 0.2))
     scale = 1.0 / jnp.sqrt(prec_obs)
 
     with plate("data", size=N, dim=-2):
@@ -40,6 +40,11 @@ def BNN(X, y=None):
 ```
 
 ![Bayesian Neural Net](./plots/BayesianDNN.jpg)
+
+### Effect of the sample size on the predictive uncertainty with a G(6,6) prior on precision
+| 50 samples | 100 samples | 500 samples |
+| :--: | :--: | :--: |
+| <img src="./plots/BayesianDNN_50.jpg" width="200"/> | <img src="./plots/BayesianDNN_100.jpg" width="200"/> | <img src="./plots/BayesianDNN_500.jpg" width="200"/> |
 
 ## MNIST & Corrupted MNIST
 
