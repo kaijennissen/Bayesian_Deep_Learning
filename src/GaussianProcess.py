@@ -1,3 +1,4 @@
+import argparse
 import warnings
 from datetime import datetime
 from typing import Tuple
@@ -23,6 +24,8 @@ from numpyro.infer import (
     init_to_uniform,
     init_to_value,
 )
+
+numpyro.set_host_device_count(4)
 
 # squared exponential kernel with diagonal noise
 
@@ -82,10 +85,11 @@ kernel = rbf_kernel
 
 def GaussianProcess(X, y=None):
     N, _ = X.shape
-    var = numpyro.sample("kernel_var", dist.LogNormal(loc=0.0, scale=2.0))
-    length = numpyro.sample("kernel_length", dist.LogNormal(loc=0.0, scale=2.0))
-    noise = numpyro.sample("kernel_noise", dist.LogNormal(loc=0.0, scale=2.0))
+    var = numpyro.sample("kernel_var", dist.LogNormal(loc=0.0, scale=1.0))
+    length = numpyro.sample("kernel_length", dist.LogNormal(loc=0.0, scale=1.0))
+    noise = numpyro.sample("kernel_noise", dist.LogNormal(loc=0.0, scale=1.0))
     # period = numpyro.sample("kernel_period", dist.InverseGamma(2, 1))
+
     k = numpyro.deterministic(
         "k", kernel(X=X, Z=X.T, var=var, length=length, noise=noise)
     )
@@ -144,33 +148,45 @@ def get_data(N: int = 100, N_test: int = 1000):
     X_test = jnp.asarray(np.linspace(0, 62, N_test)[..., None])
     y = jnp.asarray(df["accel"].values)
 
-    return X, X_test, y
+    np.random.seed(89)
+    X = np.random.uniform(-np.pi / 2, np.pi / 2, N)
+    I = np.random.binomial(n=1, p=0.8, size=N)
+    y = (
+        np.sin(X * 2)
+        + I * np.random.normal(0, 0.1, size=(N))
+        + (1 - I) * np.random.normal(0, 3, size=(N))
+    )
+
+    X_test = jnp.linspace(-1.3 * (np.pi / 2), (np.pi / 2) * 1.3, N_test)
+    return X[:, np.newaxis], X_test[:, np.newaxis], y
 
 
-def main():
+def main(N: int, num_warmup: int, num_samples: int, num_chains: int, post_samples: int):
 
-    X, X_test, y = get_data()
+    X, X_test, y = get_data(N=N)
 
     rng_key, rng_key_predict = random.split(random.PRNGKey(532))
     nuts_kernel = NUTS(GaussianProcess, init_strategy=init_to_median())
     mcmc = MCMC(
         nuts_kernel,
-        num_warmup=1000,
-        num_samples=4000,
-        num_chains=1,
-        chain_method="vectorized",
+        num_warmup=num_warmup,
+        num_samples=num_samples,
+        num_chains=num_chains,
+        chain_method="parallel",
     )
     mcmc.run(X=X, y=y, rng_key=rng_key)
     mcmc.print_summary()
     samples = mcmc.get_samples()
 
-    vmap_args = (
-        random.split(rng_key_predict, samples["kernel_var"].shape[0]),
-        samples["kernel_var"],
-        # samples["kernel_period"],
-        samples["kernel_length"],
-        samples["kernel_noise"],
+    idx = random.randint(
+        random.PRNGKey(12), shape=(post_samples,), minval=0, maxval=num_samples
     )
+    subsamples = map(
+        lambda x: x[idx],
+        (samples["kernel_var"], samples["kernel_length"], samples["kernel_noise"]),
+    )
+    vmap_args = (random.split(rng_key_predict, post_samples),) + tuple(subsamples)
+
     means, predictions = vmap(
         lambda rng_key, var, length, noise: predict(
             rng_key, X, y, X_test, var, length, noise
@@ -184,14 +200,11 @@ def main():
     y_hpdi = hpdi(predictions, prob=0.9)
     y_05 = y_hpdi[0, :]
     y_95 = y_hpdi[1, :]
-    y_hpdi = hpdi(predictions, prob=0.98)
-    y_01 = y_hpdi[0, :]
-    y_99 = y_hpdi[1, :]
 
     make_plot(
         train_data=(X, y),
         test_data=(X_test, yhat),
-        ci_intervals=[("98", y_01, y_99), ("90", y_05, y_95), ("50", y_25, y_75)],
+        ci_intervals=[("90", y_05, y_95), ("50", y_25, y_75)],
     )
 
 
@@ -199,9 +212,9 @@ def make_plot(train_data: Tuple, test_data: Tuple, ci_intervals):
     X, y = train_data
     X_test, yhat = test_data
     colors = ["lightblue", "lightgreen", "green"]
-    fig, ax = plt.subplots(nrows=1, ncols=1)
+    fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(12, 8))
 
-    ax.plot(X.ravel(), y.ravel(), "x", color="tab:blue", markersize=5, label="obs")
+    ax.plot(X.ravel(), y.ravel(), ".", color="tab:blue", markersize=5, label="obs")
     ax.plot(X_test.ravel(), yhat.ravel(), "tab:orange", label="mean")
     for (ci_level, upper, lower), color in zip(ci_intervals, colors):
         ax.fill_between(
@@ -212,30 +225,29 @@ def make_plot(train_data: Tuple, test_data: Tuple, ci_intervals):
             color=color,
             label=ci_level,
         )
+
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.set_title("Gaussian-Process")
     plt.legend(loc="lower right")
     datetime_str = datetime.now().strftime("%Y_%m_%d_%H_%M")
-    plt.savefig(f"plots/GaussianProcess_{datetime_str}.jpg")
+    plt.savefig(f"plots/GaussianProcess_{datetime_str}.jpg", dpi=300)
 
 
 if __name__ == "__main__":
 
-    main()
-# import csv
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--sample-size", default=50, type=int)
+    parser.add_argument("--num-warmup", default=1_000, type=int)
+    parser.add_argument("--num-samples", default=4_000, type=int)
+    parser.add_argument("--num-chains", default=1, type=int)
+    parser.add_argument("--post-samples", default=100, type=int)
 
-# # read flash.dat to a list of lists
-# datContent = [i.strip().split() for i in open("./motor.dat").readlines()]
-
-# # write it as a new CSV file
-# with open("./motor.csv", "wb") as f:
-#     writer = csv.writer(f)
-#     writer.writerows(datContent)
-
-# import pandas as pd
-
-# df = pd.DataFrame(
-#     datContent[37:],
-#     columns=datContent[36],
-# )
-# df=df.astype({"times": np.float, "accel": np.float, "strata": np.float, "v": np.float},)
-# df.to_csv("motor.csv",index=False)
-# pd.read_csv("motor.csv")
+    args = parser.parse_args()
+    main(
+        N=args.sample_size,
+        num_warmup=args.num_warmup,
+        num_samples=args.num_samples,
+        num_chains=args.num_chains,
+        post_samples=args.post_samples,
+    )
