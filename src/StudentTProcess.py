@@ -1,7 +1,6 @@
 import argparse
 import warnings
 from datetime import datetime
-from typing import Tuple
 
 import pandas as pd
 
@@ -12,7 +11,6 @@ import numpy as np
 import numpyro
 import numpyro.distributions as dist
 from jax import jit, random, vmap
-from numpyro import handlers
 from numpyro.diagnostics import hpdi
 from numpyro.infer import (
     MCMC,
@@ -79,16 +77,13 @@ def local_periodic(
     return k
 
 
-kernel = rbf_kernel
-
-
 def StudentTProcess(X, y=None):
     N, _ = X.shape
-    var = numpyro.sample("kernel_var", dist.HalfNormal(scale=2.0))
-    length = numpyro.sample("kernel_length", dist.HalfNormal(scale=2.0))
-    noise = numpyro.sample("kernel_noise", dist.HalfNormal(scale=2.0))
+    length = numpyro.sample("kernel_length", dist.HalfNormal(scale=10.0))
+    var = numpyro.sample("kernel_var", dist.HalfNormal(scale=10.0))
+    noise = numpyro.sample("kernel_noise", dist.HalfNormal(scale=10.0))
     # period = numpyro.sample("kernel_period", dist.InverseGamma(2, 1))
-    nu = numpyro.sample("nu", dist.Gamma(1.0, 1.0))
+    nu = numpyro.sample("nu", dist.Gamma(4.0, 0.10))
 
     # TODO: cholesky decomposition
     K_tril = numpyro.deterministic(
@@ -130,51 +125,29 @@ def predict(rng_key, X, Y, X_test, var, length, noise, nu):
     psi_2_tilde = K_21 @ K_11_inv @ (Y - psi_1) + psi_2
     beta_1 = (Y - psi_1).T @ K_11_inv @ (Y - psi_1)
     K_22_tilde = K_22 - K_21 @ K_11_inv @ K_12
-    sigma_noise = jnp.sqrt(jnp.clip(jnp.diag(K_22), a_min=0.0)) * random.normal(
+    sigma_noise = jnp.sqrt(jnp.clip(jnp.diag(K_22_tilde), a_min=0.0)) * random.normal(
         rng_key, X_test.shape[:1]
     )
     df = nu + n1
     mu = psi_2_tilde
-    K = K_22 * (nu + beta_1 - 2) / (nu + n1 - 2)
+    K = K_22_tilde * (nu + beta_1 - 2) / (nu + n1 - 2)
     # return df, mu, K
-    return psi_2_tilde, psi_2_tilde + sigma_noise
+    return psi_2_tilde, psi_2_tilde + sigma_noise, df, mu, K
+
+
+kernel = rbf_kernel
 
 
 def get_data(N: int = 50, N_test: int = 500):
-    sigma_obs = 0.15
+    df = pd.read_csv("./data/motor.csv")
+    X = jnp.asarray(df["times"].values[..., None])
+    X_test = jnp.asarray(np.linspace(0, 62, N_test)[..., None])
+    y = jnp.asarray(df["accel"].values)
 
-    # np.random.seed(0)
-    # X = jnp.linspace(-1, 1, N)
-    # Y = X + 0.2 * jnp.power(X, 3.0) + 0.5 * jnp.power(0.5 + X, 2.0) * jnp.sin(4.0 * X)
-    # Y += sigma_obs * np.random.randn(N)
-    # Y -= jnp.mean(Y)
-    # Y /= jnp.std(Y)
+    assert X.ndim == X_test.ndim == 2
+    assert y.ndim == 1
 
-    np.random.seed(89)
-    x = np.random.uniform(-np.pi / 2, np.pi / 2, N)
-    I = np.random.binomial(n=1, p=0.8, size=N)
-    y = (
-        np.sin(x * 2)
-        + I * np.random.normal(0, 0.1, size=(N))
-        + (1 - I) * np.random.normal(0, 3, size=(N))
-    )
-
-    x_test = jnp.linspace(-1.1 * (np.pi / 2), (np.pi / 2) * 1.1, N_test)
-
-    # assert X.shape == (N,)
-    # assert Y.shape == (N,)
-
-    # X_test = jnp.linspace(-1.3, 1.3, N_test)
-    return x[:, np.newaxis], x_test[:, np.newaxis], y
-
-    # df = pd.read_csv("./data/motor.csv")
-    # X = jnp.asarray(df["times"].values[..., None])
-    # X_test = jnp.asarray(np.linspace(0, 62, N_test)[..., None])
-    # y = jnp.asarray(df["accel"].values)
-    # assert X.ndim == 2
-    # assert X_test.ndim == 2
-    # assert y.ndim == 1
-    # return X, X_test, y
+    return X, X_test, y
 
 
 def main(N: int, num_warmup: int, num_samples: int, num_chains: int, post_samples: int):
@@ -209,30 +182,50 @@ def main(N: int, num_warmup: int, num_samples: int, num_chains: int, post_sample
     )
     vmap_args = (random.split(rng_key_predict, post_samples),) + tuple(subsamples)
 
-    means, predictions = vmap(
+    means, predictions, df, mu, K = vmap(
         lambda rng_key, var, length, noise, nu: predict(
             rng_key, X, y, X_test, var, length, noise, nu
         )
     )(*vmap_args)
+    # more investigations into mean
 
-    yhat = jnp.mean(means, axis=0)
-    y_hpdi = hpdi(predictions, prob=0.5)
-    y_25 = y_hpdi[0, :]
-    y_75 = y_hpdi[1, :]
-    y_hpdi = hpdi(predictions, prob=0.9)
-    y_05 = y_hpdi[0, :]
-    y_95 = y_hpdi[1, :]
+    stp = dist.MultivariateStudentT(df, mu, jnp.linalg.cholesky(K))
 
-    ci_intervals = [("90", y_05, y_95), ("50", y_25, y_75)]
-    colors = ["lightblue", "lightgreen", "green"]
-    alpha = 0.2
+    std = jnp.mean(jnp.sqrt(stp.variance), axis=0)
+
+    y_hpdi = hpdi(stp.mean, prob=0.98, axis=0)
+    y_01 = y_hpdi[0, :]
+    y_99 = y_hpdi[1, :]
+    y_mean = jnp.mean(stp.mean, axis=0)
+
+    ci_intervals = [
+        ("98%-HPDI of mean", y_01, y_99)
+    ]  # ,("90", y_05, y_95), ("50", y_25, y_75)]
+    colors = ["orange"]
+    alpha = 0.3
 
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(12, 8))
 
     ax.plot(X.ravel(), y.ravel(), ".", color="tab:blue", markersize=5, label="obs")
-    ax.plot(X_test.ravel(), yhat.ravel(), "tab:orange", label="mean")
+    ax.plot(X_test.ravel(), y_mean.ravel(), "tab:orange", label="mean")
+    ax.fill_between(
+        X_test.ravel(),
+        y_mean.ravel() + std,
+        y_mean.ravel() - std,
+        alpha=0.4,
+        color="green",
+        label="mean +/- std",
+    )
+    ax.fill_between(
+        X_test.ravel(),
+        y_mean.ravel() + 2 * std,
+        y_mean.ravel() - 2 * std,
+        alpha=0.2,
+        color="green",
+        label="mean +/- 2 x std",
+    )
     for (ci_level, upper, lower), color in zip(ci_intervals, colors):
-        alpha += 0.05
+        alpha += 0.3
         ax.fill_between(
             X_test.ravel(),
             upper.ravel(),
