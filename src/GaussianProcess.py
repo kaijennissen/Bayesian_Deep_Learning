@@ -50,9 +50,9 @@ def GP1(X, y=None):
     N, _ = X.shape
 
     # Mean-GP
-    var_k1 = numpyro.sample("var_k1", dist.LogNormal(0.0, 1.0))
-    length_k1 = numpyro.sample("length_k1", dist.LogNormal(0.0, 1.0))
-    noise_k1 = numpyro.sample("noise_k1", dist.LogNormal(0.0, 1.0))
+    var_k1 = numpyro.sample("var_k1", dist.LogNormal(0, 1))
+    length_k1 = numpyro.sample("length_k1", dist.LogNormal(0, 1))
+    noise_k1 = numpyro.sample("noise_k1", dist.HalfNormal(0.10))
     k1 = numpyro.deterministic(
         "k1",
         kernel(
@@ -73,14 +73,16 @@ def GP1(X, y=None):
         assert y.shape == (N,)
 
     # Likelihood
-    numpyro.sample("y", dist.Normal(loc=mean, scale=scale), obs=y)
+    with numpyro.plate("data", N):
+        numpyro.sample("y", dist.Normal(loc=mean, scale=scale), obs=y)
+    # numpyro.sample("y", dist.Normal(loc=mean, scale=scale), obs=y)
 
 
 def GP2(X, y=None):
     N, _ = X.shape
 
     # Mean-GP
-    var_k1 = numpyro.sample("var_k1", dist.LogNormal(0, 1))
+    var_k1 = numpyro.sample("var_k1", dist.LogNormal(0, 0.1))
     length_k1 = numpyro.sample("length_k1", dist.LogNormal(0, 1))
     noise_k1 = numpyro.sample("noise_k1", dist.LogNormal(0, 1))
     k1 = numpyro.deterministic(
@@ -189,7 +191,7 @@ def dataset_M(N: int = 100):
     return x, y
 
 
-def dataset_G(N: int = 100):
+def dataset_G(N: int = 400):
     # Goldberg et al. 1998
     x = np.random.uniform(0, 1, N)
     mean = 2 * np.sin(2 * np.pi * x)
@@ -207,7 +209,7 @@ def dataset_Y(N: int = 100):
     return x, y
 
 
-def dataset_W(N: int = 200):
+def dataset_W(N: int = 2000):
     # Williams 1996
     x = np.random.uniform(0, np.pi, N)
     mean = np.sin(2.5 * x) * np.sin(1.5 * x)
@@ -244,13 +246,13 @@ def main(
     elif model_str == "GP3":
         model = GP3
 
-    nuts_kernel = NUTS(model)
+    nuts_kernel = NUTS(model, max_tree_depth=10)
     mcmc = MCMC(
         nuts_kernel,
         num_warmup=num_warmup,
         num_samples=num_samples,
         num_chains=num_chains,
-        chain_method="parallel",
+        chain_method="sequential",
         jit_model_args=True,
     )
     mcmc.run(X=X, y=y, rng_key=jax.random.PRNGKey(532))
@@ -281,8 +283,8 @@ def main(
 
         mean = jnp.mean(mu, axis=0)
         hpdi_9 = hpdi(predictions, prob=0.9, axis=0)
-        lower = hpdi_9[0, ...]
-        upper = hpdi_9[1, ...]
+        lower_mean = hpdi_9[0, ...]
+        upper_mean = hpdi_9[1, ...]
         scale = samples["scale"][idx]
         std = jnp.mean(scale)
     elif model_str == "GP2":
@@ -384,37 +386,45 @@ def main(
     ax = axes[1]
     ax.plot(x, y, ".", color="tab:blue", markersize=5, label="obs")
     ax.plot(x_test, mean, "tab:orange", label="mean")
-    ax.fill_between(
-        x_test.ravel(),
-        lower_mean,
-        upper_mean,
-        alpha=0.2,
-        color="green",
-        label="90% - HPDI",
-    )
+    try:
+        ax.fill_between(
+            x_test.ravel(),
+            lower_mean,
+            upper_mean,
+            alpha=0.2,
+            color="green",
+            label="90% - HPDI",
+        )
+    except:
+        None
     ax = axes[2]
     ax.plot(x, y, ".", color="tab:blue", markersize=5, label="obs")
     ax.plot(x_test, mean, "tab:orange", label="mean")
-    ax.fill_between(
-        x_test.ravel(),
-        lower_std,
-        upper_std,
-        alpha=0.2,
-        color="green",
-        label="mean +/- 2 x std",
-    )
+    try:
+        ax.fill_between(
+            x_test.ravel(),
+            lower_std,
+            upper_std,
+            alpha=0.2,
+            color="green",
+            label="mean +/- 2 x std",
+        )
+    except:
+        None
     ax = axes[3]
     ax.plot(x, y, ".", color="tab:blue", markersize=5, label="obs")
     ax.plot(x_test, mean, "tab:orange", label="mean")
-    ax.fill_between(
-        x_test.ravel(),
-        lower_total,
-        upper_total,
-        alpha=0.2,
-        color="orange",
-        label="combined",
-    )
-
+    try:
+        ax.fill_between(
+            x_test.ravel(),
+            lower_total,
+            upper_total,
+            alpha=0.2,
+            color="orange",
+            label="combined",
+        )
+    except:
+        None
     for ax in axes:
         ax.set_xlabel("x")
         ax.set_ylabel("y")
