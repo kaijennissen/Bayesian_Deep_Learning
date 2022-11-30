@@ -36,8 +36,8 @@ def MNDNN(X, y=None):
         "W1",
         MatrixNormal(
             loc=jnp.zeros((feature_dim, layer1_dim)),
-            scale_rows=jnp.eye(feature_dim),
-            scale_columns=jnp.eye(layer1_dim),
+            scale_tril_row=jnp.eye(feature_dim),
+            scale_tril_column=jnp.eye(layer1_dim),
         ),
     )
     b1 = numpyro.sample("b1", dist.Normal(jnp.zeros(layer1_dim), 1.0))
@@ -161,7 +161,7 @@ def main(
 
     X, y, X_test = get_data(N=N)
 
-    model = GaussianBNN
+    model = MNDNN
     rng_key, rng_key_predict = random.split(random.PRNGKey(915))
     kernel = NUTS(model)
     mcmc = MCMC(
