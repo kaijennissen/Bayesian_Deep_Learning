@@ -16,8 +16,6 @@ from numpyro.contrib.module import random_flax_module
 from numpyro.diagnostics import hpdi
 from numpyro.infer import MCMC, NUTS, Predictive
 
-from MatrixNormal import MatrixNormal
-
 
 @jit
 def nonlin(x):
@@ -34,7 +32,7 @@ def MNDNN(X, y=None):
     # layer 1
     W1 = numpyro.sample(
         "W1",
-        MatrixNormal(
+        dist.MatrixNormal(
             loc=jnp.zeros((feature_dim, layer1_dim)),
             scale_tril_row=jnp.eye(feature_dim),
             scale_tril_column=jnp.eye(layer1_dim),
