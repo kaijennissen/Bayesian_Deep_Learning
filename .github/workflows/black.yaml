@@ -15,6 +15,6 @@ jobs:
           version: "~= 22.12"
       - uses: isort/isort-action@master
         with:
-          options: "--profile=black"
-          src: "./src"
-          requirementsFiles: "requirements.txt requirements-test.txt"
+          sortPaths: "./src"
+          configuration: "--profile=black"
+          requirementsFiles: "requirements.txt requirements-dev.txt"
