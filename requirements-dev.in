@@ -1,0 +1,6 @@
+-r requirements.in
+black
+isort
+mypy
+pylama
+pre-commit
