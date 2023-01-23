@@ -3,13 +3,12 @@ import warnings
 from datetime import datetime
 
 warnings.simplefilter("ignore", FutureWarning)
-import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 import numpyro
 
 numpyro.set_host_device_count(2)
-
+import jax.numpy as jnp
 import numpyro.distributions as dist
 from flax import linen as nn
 from jax import jit, random
@@ -21,6 +20,46 @@ from numpyro.infer import MCMC, NUTS, Predictive
 @jit
 def nonlin(x):
     return jnp.tanh(x)
+
+
+def MNDNN(X, y=None):
+
+    N, feature_dim = X.shape
+    out_dim = 1
+    layer1_dim = 4
+    layer2_dim = 4
+
+    # layer 1
+    W1 = numpyro.sample(
+        "W1",
+        dist.MatrixNormal(
+            loc=jnp.zeros((feature_dim, layer1_dim)),
+            scale_tril_row=jnp.eye(feature_dim),
+            scale_tril_column=jnp.eye(layer1_dim),
+        ),
+    )
+    b1 = numpyro.sample("b1", dist.Normal(jnp.zeros(layer1_dim), 1.0))
+    out1 = nonlin(jnp.matmul(X, W1) + b1)
+
+    # layer 2
+    W2 = numpyro.sample("W2", dist.Normal(jnp.zeros((layer1_dim, layer2_dim)), 1.0))
+    b2 = numpyro.sample("b2", dist.Normal(jnp.zeros(layer1_dim), 1.0))
+    out2 = nonlin(jnp.matmul(out1, W2) + b2)
+
+    # output layer
+    W3 = numpyro.sample("out_layer", dist.Normal(jnp.zeros((layer2_dim, out_dim)), 1.0))
+    b3 = numpyro.sample("b3", dist.Normal(jnp.zeros(out_dim), 1.0))
+
+    mean = numpyro.deterministic("mean", jnp.matmul(out2, W3) + b3)
+    prec_obs = numpyro.sample("prec_obs", dist.Gamma(3.0, 1.0))
+    scale = 1.0 / jnp.sqrt(prec_obs)
+
+    assert mean.shape == (N, 1)
+    assert scale.shape == ()
+    if y is not None:
+        assert y.shape == (N,)
+
+    numpyro.sample("y", dist.Normal(loc=jnp.squeeze(mean), scale=scale), obs=y)
 
 
 def GaussianBNN(X, y=None):
@@ -120,7 +159,7 @@ def main(
 
     X, y, X_test = get_data(N=N)
 
-    model = GaussianBNN
+    model = MNDNN
     rng_key, rng_key_predict = random.split(random.PRNGKey(915))
     kernel = NUTS(model)
     mcmc = MCMC(
