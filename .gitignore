@@ -5,6 +5,7 @@
 *.swo
 .DS_Store*
 .DS_Store
+.dccache
 
 # pycharm
 /.idea
