@@ -1,5 +1,5 @@
 from copy import deepcopy
-from typing import Callable, Dict, Tuple
+from typing import Dict, Tuple
 
 import haiku as hk
 import jax

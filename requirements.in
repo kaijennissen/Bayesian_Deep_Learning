@@ -1,5 +1,6 @@
 arviz
 flax
+dm-haiku
 ipython
 jax
 jupyter
