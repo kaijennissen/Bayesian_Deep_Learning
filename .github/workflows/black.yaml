@@ -6,15 +6,16 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v3.5
       - uses: psf/black@stable
         with:
+          version: 23.3.0
           options: "--check --verbose"
           src: "./src"
           jupyter: true
-          version: "~= 22.12"
-      - uses: isort/isort-action@master
+      - uses: isort/isort-action@v1.1
         with:
+          version: 5.12.0
           sortPaths: "./src"
           configuration: "--profile=black"
           requirementsFiles: "requirements.txt requirements-dev.txt"

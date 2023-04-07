@@ -1,0 +1,26 @@
+name: BNN
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  # python
+  - python==3.10.*
+  - pip
+  # dev
+  - pre-commit
+  - black
+  - isort
+  - mypy
+  - pylama
+  - ruff
+  # project
+  - arviz
+  - flax
+  - ipython
+  - jax
+  - jupyter
+  - numpy
+  - numpyro
+  - optax
+  - pandas
+  - matplotlib
