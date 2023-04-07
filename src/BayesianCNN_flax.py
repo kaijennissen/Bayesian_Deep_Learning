@@ -1,6 +1,5 @@
 import warnings
 
-warnings.simplefilter("ignore", FutureWarning)
 import flax.linen as nn
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
@@ -10,10 +9,10 @@ import numpyro.distributions as dist
 import pandas as pd
 from jax import random
 from numpyro.contrib.module import random_flax_module
-from numpyro.infer import MCMC, NUTS, SVI, Predictive, Trace_ELBO
-from numpyro.infer.autoguide import AutoNormal
-from numpyro.optim import Adam
+from numpyro.infer import MCMC, NUTS, Predictive
 from scipy.stats import mode
+
+warnings.simplefilter("ignore", FutureWarning)
 
 
 class CNN(nn.Module):

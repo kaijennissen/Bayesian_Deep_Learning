@@ -2,28 +2,19 @@ import argparse
 import warnings
 from datetime import datetime
 
-warnings.simplefilter("ignore", FutureWarning)
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 import numpyro
 import numpyro.distributions as dist
-from jax.nn import relu, tanh
+from jax.nn import tanh
 from numpyro.diagnostics import hpdi
 from numpyro.distributions import constraints
-from numpyro.infer import (
-    MCMC,
-    NUTS,
-    SVI,
-    Predictive,
-    RenyiELBO,
-    Trace_ELBO,
-    TraceGraph_ELBO,
-    TraceMeanField_ELBO,
-)
+from numpyro.infer import MCMC, NUTS, SVI, Predictive, Trace_ELBO
 from numpyro.infer.autoguide import AutoDAIS
 
+warnings.simplefilter("ignore", FutureWarning)
 numpyro.set_host_device_count(4)
 
 # https://github.com/microsoft/horseshoe-bnn
@@ -32,7 +23,6 @@ numpyro.set_host_device_count(4)
 
 
 def GaussianBNN(X, y=None, D_H=10):
-
     N, k = X.shape
     D_Y = 1
 
@@ -63,7 +53,6 @@ def GaussianBNN(X, y=None, D_H=10):
 
 
 def StudentTBNN(X, y=None, D_H=10):
-
     N, k = X.shape
     D_Y = 1
 
@@ -107,7 +96,6 @@ def StudentTBNN(X, y=None, D_H=10):
 
 
 def guideBNN(X, y=None, D_H=10):
-
     N, k = X.shape
     D_Y = 1
 
@@ -123,8 +111,8 @@ def guideBNN(X, y=None, D_H=10):
         "b1_scale", init_value=jnp.ones(D_H), constraint=constraints.positive
     )
 
-    W1 = numpyro.sample("W1", dist.Normal(W1_loc, W1_scale))
-    b1 = numpyro.sample("b1", dist.Normal(b1_loc, b1_scale))
+    numpyro.sample("W1", dist.Normal(W1_loc, W1_scale))
+    numpyro.sample("b1", dist.Normal(b1_loc, b1_scale))
 
     # layer 2
     W2_loc = numpyro.param("W2_loc", init_value=jnp.ones((D_H, D_Y)))
@@ -138,19 +126,18 @@ def guideBNN(X, y=None, D_H=10):
         "b2_scale", init_value=jnp.ones(D_Y), constraint=constraints.positive
     )
 
-    W2 = numpyro.sample("W2", dist.Normal(W2_loc, W2_scale))
-    b2 = numpyro.sample("b2", dist.Normal(b2_loc, b2_scale))
+    numpyro.sample("W2", dist.Normal(W2_loc, W2_scale))
+    numpyro.sample("b2", dist.Normal(b2_loc, b2_scale))
 
     # shape, rate parametrization (see Wikipedia) -> mean = 1, var = 1/6
     alpha = numpyro.param("alpha", init_value=6, constraint=constraints.positive)
     beta = numpyro.param("beta", init_value=6, constraint=constraints.positive)
 
     prec_obs = numpyro.sample("prec_obs", dist.Gamma(alpha, beta))
-    scale = numpyro.deterministic("obs_scale", 1.0 / jnp.sqrt(prec_obs))
+    numpyro.deterministic("obs_scale", 1.0 / jnp.sqrt(prec_obs))
 
 
 def sin_data(N=10, N_test=1_000):
-
     np.random.seed(89)
     x = np.random.uniform(-np.pi / 2, np.pi / 2, N)
     I = np.random.binomial(n=1, p=0.8, size=N)
@@ -179,7 +166,6 @@ def main(
     inference: str = "MCMC",
     model_str: str = "Gaussian",
 ):
-
     if model_str == "Gaussian":
         model = GaussianBNN
     elif model_str == "StudentT":
@@ -193,7 +179,7 @@ def main(
         guide = AutoDAIS(model, K=128)
         svi = SVI(model, guide, numpyro.optim.Adam(5e-3), Trace_ELBO())
         svi_result = svi.run(rng_key, num_samples, X=X, y=y, D_H=D_H)
-        params, losses = svi_result.params, svi_result.losses
+        params, _ = svi_result.params, svi_result.losses
         predictive = Predictive(model, guide=guide, params=params, num_samples=1000)
 
     elif inference == "MCMC":
@@ -237,7 +223,7 @@ def main(
     ax.set_title(f"BNN with HS-prior and {D_H} hidden units")
     plt.legend(loc="upper left")
 
-    datetime_str = datetime.now().strftime("%Y_%m_%d_%H_%M")
+    datetime.now().strftime("%Y_%m_%d_%H_%M")
     plt.savefig(f"plots/experiment2/{model_str}_{N}_{D_H}_{inference}.jpg", dpi=300)
 
 

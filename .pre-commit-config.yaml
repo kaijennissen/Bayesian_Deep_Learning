@@ -12,15 +12,20 @@ repos:
         args: ["--maxkb=1000"]
       - id: mixed-line-ending
   - repo: https://github.com/psf/black
-    rev: 22.12.0
+    rev: 23.3.0
     hooks:
       - id: black
         stages: [commit, push]
         types: [python]
         exclude: ".dat"
   - repo: https://github.com/PyCQA/isort
-    rev: 5.11.4
+    rev: 5.12.0
     hooks:
       - id: isort
         args: ["--profile", "black", "--filter-files"]
         language_version: python3
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    # Ruff version.
+    rev: 'v0.0.261'
+    hooks:
+      - id: ruff

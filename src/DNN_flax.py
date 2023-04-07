@@ -25,7 +25,6 @@ class Net(nn.Module):
 
     @nn.compact
     def __call__(self, x):
-
         x = nn.Dense(self.n_units)(x)
         x = nn.relu(x)
         x = nn.Dense(self.n_units)(x)
@@ -57,7 +56,6 @@ def get_data2(N=50, D_X=3, sigma_obs=0.05, N_test=500):
 
 
 def get_data(N: int = 30, N_test: int = 1000):
-
     X = jnp.asarray(np.random.uniform(-np.pi * 3 / 2, np.pi, size=(N, 1)))
     y = jnp.asarray(np.sin(X) + np.random.normal(loc=0, scale=0.2, size=(N, 1)))
     X_test = jnp.linspace(-np.pi * 2, 2 * np.pi, num=N_test).reshape((-1, 1))

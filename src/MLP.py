@@ -6,21 +6,18 @@ Step 3: Commpare results from 2 with a second order optimizer / natural gradient
 Step 4: Add aleatoric uncertainty i.e. Bayesian neural network
 """
 from datetime import datetime
-from functools import partial
 
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 import numpyro.distributions as dist
-import seaborn as sns
-from jax import grad, jit, jvp, value_and_grad, vjp, vmap
-from jax.nn import leaky_relu, relu, sigmoid, softplus, tanh
+from jax import jit, jvp, value_and_grad, vjp, vmap
+from jax.nn import leaky_relu, sigmoid, softplus
 from jax.scipy.sparse.linalg import cg
 
 
 # Step 1: Simple NN
 def get_data(N=50, D_X=3, sigma_obs=0.05, N_test=500):
-    D_Y = 1  # create 1d outputs
     np.random.seed(0)
     X = jnp.linspace(-1.5, 1.5, N)
 
@@ -54,9 +51,8 @@ def MLP(layer_dims: list):
 
 
 def predict(params, X):
-
     activations = X
-    for (W, b) in params[:-1]:
+    for W, b in params[:-1]:
         output = jnp.dot(activations, W) + b
         activations = leaky_relu(output, 0.05)
 
@@ -67,9 +63,8 @@ def predict(params, X):
 
 
 def predict_single(params, x):
-
     activation = x
-    for (W, b) in params[:-1]:
+    for W, b in params[:-1]:
         output = jnp.dot(activation, W) + b
         activation = sigmoid(output)
 
@@ -91,9 +86,8 @@ def mse(params, X, y):
 
 
 def predict_normal(params, X):
-
     activation = X
-    for (W, b) in params[:-1]:
+    for W, b in params[:-1]:
         output = jnp.dot(activation, W) + b
         activation = sigmoid(output)
 
@@ -121,10 +115,14 @@ def fisher_vp(f, w, v):
 
 @jit
 def natural_emp_step(params, X, y, learning_rate):
-
     loss, grads = value_and_grad(nll)(params, X, y)  # compute gradients
-    f = lambda w: nll(w, X, y)  # setup mvp
-    fvp = lambda v: fisher_vp(f, params, v)
+
+    def f(w):
+        return nll(w, X, y)  # setup mvp
+
+    def fvp(v):
+        return fisher_vp(f, params, v)
+
     ngrads, _ = cg(fvp, grads, maxiter=20)  # approx solve with Conjugate Gradient
     params_new = [
         (W - learning_rate * dW, b - learning_rate * db)
@@ -235,8 +233,13 @@ def main(N: int = 150):
     @jit  # type: ignore
     def update(params, learning_rate, X, y):
         loss, grads = jit(value_and_grad(loss_fn))(params, X, y)  # compute gradients
-        f = lambda w: loss_fn(w, X, y)  # setup mvp
-        fvp = lambda v: fisher_vp(f, params, v)
+
+        def f(w):
+            return loss_fn(w, X, y)  # setup mvp
+
+        def fvp(v):
+            return fisher_vp(f, params, v)
+
         ngrads, _ = cg(fvp, grads, maxiter=20)  # approx solve with Conjugate Gradient
         params = [
             (W - learning_rate * dW, b - learning_rate * db)

@@ -85,6 +85,7 @@ def calc_matrics(
 
 # Functions above are not model dependent, i.e. do not rely on global variables
 
+
 # replace with CNN
 def net(images: jnp.ndarray) -> jnp.ndarray:
     mlp = hk.Sequential(
@@ -257,9 +258,7 @@ if __name__ == "__main__":
     rng_seq = hk.PRNGSequence(2686347)
     aprx_posterior = deepcopy(init_posterior)
     for epoch in range(1, EPOCHS + 1):
-
         for images, labels in get_batches(BATCH_SIZE):
-
             aprx_posterior, opt_state = sgd_update(
                 dist=aprx_posterior,
                 epoch=epoch,
@@ -345,7 +344,7 @@ if __name__ == "__main__":
         ax2.set_ylabel("Probability")
         ax2.set_title("Model estimated probabilities")
     fig.tight_layout()
-    plt.savefig(f"plots/MNIST_C_BCNN.jpg", dpi=300)
+    plt.savefig("plots/MNIST_C_BCNN.jpg", dpi=300)
 
     fig, axes = plt.subplots(
         nrows=num_images,
@@ -377,4 +376,4 @@ if __name__ == "__main__":
         ax.set_ylabel("Probability")
     fig.suptitle("Model estimated probabilities")
     fig.tight_layout()
-    plt.savefig(f"plots/MNIST_C_BCNN_probs.jpg", dpi=300)
+    plt.savefig("plots/MNIST_C_BCNN_probs.jpg", dpi=300)

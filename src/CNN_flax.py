@@ -1,9 +1,5 @@
-import warnings
-
-from numpyro import deterministic
-
-warnings.simplefilter("ignore", FutureWarning)
 import time
+import warnings
 
 import flax.linen as nn
 import jax
@@ -11,6 +7,8 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 import optax
+
+warnings.simplefilter("ignore", FutureWarning)
 
 
 class CNN(nn.Module):
@@ -50,7 +48,6 @@ def loss_fn(params, batch, rng_key):
 
 @jax.jit
 def update(params, opt_state, batch, rng_key):
-
     """Single SGD update step."""
     grads = jax.grad(loss_fn)(params, batch, rng_key)
     updates, new_opt_state = optimizer.update(grads, opt_state)

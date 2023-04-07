@@ -1,9 +1,7 @@
+import pickle
 import time
 import warnings
 from functools import partial
-
-warnings.simplefilter("ignore", FutureWarning)
-import pickle
 
 import blackjax.nuts as nuts
 import blackjax.stan_warmup as stan_warmup
@@ -14,6 +12,7 @@ import numpyro.distributions as dist
 from numpyro.contrib.module import random_flax_module
 from numpyro.infer.util import initialize_model
 
+warnings.simplefilter("ignore", FutureWarning)
 with open("data/mnist_train.pickle", "rb") as file:
     train = pickle.load(file)
 with open("data/mnist_test.pickle", "rb") as file:
@@ -59,15 +58,21 @@ init_params, potential_fn_gen, *_ = initialize_model(
     dynamic_args=True,
 )
 
+
 # Step 2:
-logprob = lambda position: -potential_fn_gen(x_test, y_test)(position)
+def logprob(position):
+    return -potential_fn_gen(x_test, y_test)(position)
+
+
 initial_position = init_params.z
 initial_state = nuts.new_state(initial_position, logprob)
 
+
 # Step 3: window adaption
-kernel_factory = lambda step_size, inverse_mass_matrix: nuts.kernel(
-    logprob, step_size, inverse_mass_matrix
-)
+def kernel_factory(step_size, inverse_mass_matrix):
+    return nuts.kernel(logprob, step_size, inverse_mass_matrix)
+
+
 print("start warmup")
 start_time = time.time()
 last_state, (step_size, inverse_mass_matrix), _ = stan_warmup.run(

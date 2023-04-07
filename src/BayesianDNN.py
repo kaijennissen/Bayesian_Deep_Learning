@@ -2,7 +2,6 @@ import argparse
 import warnings
 from datetime import datetime
 
-warnings.simplefilter("ignore", FutureWarning)
 import matplotlib.pyplot as plt
 import numpy as np
 import numpyro
@@ -16,6 +15,8 @@ from numpyro.contrib.module import random_flax_module
 from numpyro.diagnostics import hpdi
 from numpyro.infer import MCMC, NUTS, Predictive
 
+warnings.simplefilter("ignore", FutureWarning)
+
 
 @jit
 def nonlin(x):
@@ -23,7 +24,6 @@ def nonlin(x):
 
 
 def MNDNN(X, y=None):
-
     N, feature_dim = X.shape
     out_dim = 1
     layer1_dim = 4
@@ -63,7 +63,6 @@ def MNDNN(X, y=None):
 
 
 def GaussianBNN(X, y=None):
-
     N, feature_dim = X.shape
     out_dim = 1
     layer1_dim = 4
@@ -96,7 +95,6 @@ def GaussianBNN(X, y=None):
 
 
 class DNN(nn.Module):
-
     n_units: int
 
     @nn.compact
@@ -135,7 +133,6 @@ def get_data(N: int = 50, N_test: int = 1000):
 
 
 def make_plot(X, y, X_test, yhat, y_05, y_95):
-
     fig, ax = plt.subplots(nrows=1, ncols=1)
     ax.plot(X.ravel(), y.ravel(), ".", color="tab:blue", markersize=2, label="Observed")
     ax.plot(X_test.ravel(), yhat.ravel(), "tab:orange", label="Mean Prediction")
@@ -156,7 +153,6 @@ def make_plot(X, y, X_test, yhat, y_05, y_95):
 def main(
     N: int = 50, num_warmup: int = 1000, num_samples: int = 4000, num_chains: int = 2
 ):
-
     X, y, X_test = get_data(N=N)
 
     model = MNDNN

@@ -27,7 +27,6 @@ def nonlin(x):
 
 
 def GaussianBNN(X, y=None):
-
     N, feature_dim = X.shape
     out_dim = 10
     layer1_dim = 64
@@ -66,15 +65,21 @@ init_params, potential_fn_gen, *_ = initialize_model(
     dynamic_args=True,
 )
 
+
 # Step 2:
-logprob = lambda position: -potential_fn_gen(x_test, y_test)(position)
+def logprob(position):
+    return -potential_fn_gen(x_test, y_test)(position)
+
+
 initial_position = init_params.z
 initial_state = nuts.new_state(initial_position, logprob)
 
+
 # Step 3: window adaption
-kernel_factory = lambda step_size, inverse_mass_matrix: nuts.kernel(
-    logprob, step_size, inverse_mass_matrix
-)
+def kernel_factory(step_size, inverse_mass_matrix):
+    return nuts.kernel(logprob, step_size, inverse_mass_matrix)
+
+
 print("start warmup")
 start_time = time.time()
 last_state, (step_size, inverse_mass_matrix), _ = stan_warmup.run(

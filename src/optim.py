@@ -10,9 +10,7 @@ from functools import partial
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
-import numpyro.distributions as dist
-from jax import grad, hessian, jit, jvp, random, value_and_grad, vjp, vmap
-from jax.scipy.sparse.linalg import cg
+from jax import grad, hessian, jit
 
 
 # Second Order Optimizaiton

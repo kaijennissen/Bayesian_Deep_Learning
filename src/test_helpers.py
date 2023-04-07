@@ -4,7 +4,7 @@ import jax.numpy as jnp
 import numpy as np
 from jax import jit
 
-from CNN_helpers import convolution_fn, pool_fn
+from CNN_helpers import pool_fn
 
 # def test_convolution_fn():
 #     img = jnp.arange(36).reshape(1, 6, 6, 1)

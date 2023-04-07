@@ -1,22 +1,17 @@
 import argparse
 import warnings
 from datetime import datetime
-from re import A
-
-from jax._src.numpy.lax_numpy import concatenate
-
-warnings.simplefilter("ignore", FutureWarning)
 
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 import numpyro
 import numpyro.distributions as dist
-import seaborn as sns
 from jax import jit, random
 from numpyro.diagnostics import hpdi
 from numpyro.infer import MCMC, NUTS, Predictive
-from scipy.special import expit
+
+warnings.simplefilter("ignore", FutureWarning)
 
 # https://arxiv.org/pdf/1905.02599.pdf
 
@@ -28,7 +23,6 @@ def nonlin(x):
 
 # TODO: inculde priors in Docstring
 def HorseshoeBNN(X, y=None):
-
     N, feature_dim = X.shape
     out_dim = 1
     layer1_dim = 4
@@ -99,7 +93,6 @@ def HorseshoeBNN(X, y=None):
 
 
 def FinnishHorseshoeBNN(X, y=None):
-
     N, feature_dim = X.shape
     out_dim = 1
     layer1_dim = 4
@@ -209,7 +202,6 @@ def get_data(N=50, D_X=3, sigma_obs=0.05, N_test=500):
 
 
 def make_weights_plot(weights):
-
     d = weights.shape[1]
 
     weights_norm = jnp.sum(jnp.square(weights), axis=-1)
@@ -224,7 +216,6 @@ def make_weights_plot(weights):
 
 
 def make_predictive_plot(X, y, X_test, yhat, y_05, y_95):
-
     fig, ax = plt.subplots(nrows=1, ncols=1)
     ax.plot(X[:, 1].ravel(), y.ravel(), "x", color="tab:blue", markersize=5)
     ax.plot(X_test[:, 1].ravel(), yhat.ravel(), "tab:orange")
@@ -239,7 +230,6 @@ def make_predictive_plot(X, y, X_test, yhat, y_05, y_95):
 def main(
     N: int = 50, num_warmup: int = 1000, num_samples: int = 4000, num_chains: int = 1
 ):
-
     model = FinnishHorseshoeBNN
     X, y, X_test = get_data(N=N, D_X=10)
 

@@ -1,9 +1,6 @@
 import warnings
 from functools import partial
 
-from numpy.random.mtrand import sample
-
-warnings.simplefilter("ignore", FutureWarning)
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
@@ -11,14 +8,15 @@ import numpyro
 import numpyro.distributions as dist
 import pandas as pd
 from jax import jit, random
-from jax.nn import log_softmax, relu, sigmoid
-from numpyro.diagnostics import hpdi
-from numpyro.infer import MCMC, NUTS, SVI, Predictive, Trace_ELBO
+from jax.nn import log_softmax, relu
+from numpyro.infer import SVI, Predictive, Trace_ELBO
 from numpyro.infer.autoguide import AutoNormal
 from numpyro.optim import Adam
 from scipy.stats import mode
 
 from CNN_helpers import convolution_fn, pool_fn
+
+warnings.simplefilter("ignore", FutureWarning)
 
 
 def stratified_samples(X, y, size=200):
@@ -62,7 +60,6 @@ max_pool_fn = jit(partial(pool_fn, pool_size=7, reducer_fn=jnp.max))
 
 
 def BayesianCNN(X, y=None, num_cats=10):
-
     B, H, W, C = X.shape
     num_filters = [8]
 

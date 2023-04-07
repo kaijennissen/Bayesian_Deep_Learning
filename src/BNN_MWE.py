@@ -4,7 +4,6 @@ from numpyro.distributions import Gamma, Normal
 
 
 def BNN(X, y=None):
-
     N, k = X.shape
     D_H1 = 4
     D_H2 = 4
