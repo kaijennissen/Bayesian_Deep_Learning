@@ -3,12 +3,11 @@ import time
 import warnings
 from functools import partial
 
-import blackjax.nuts as nuts
-import blackjax.stan_warmup as stan_warmup
 import flax.linen as nn
 import jax
 import numpyro
 import numpyro.distributions as dist
+from blackjax import nuts, stan_warmup
 from numpyro.contrib.module import random_flax_module
 from numpyro.infer.util import initialize_model
 

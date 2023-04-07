@@ -126,7 +126,7 @@ if __name__ == "__main__":
 
     np.random.seed(293)
     # imgs = [np.random.choice(np.where(y_test == i)[0]) for i in range(10)]
-    imgs = [np.where(y_test == i)[0] for i in range(10)]
+    #  imgs = [np.where(y_test == i)[0] for i in range(10)]
     # plt.imshow(x_test[imgs[6][3]]);plt.show()
     # plt.imshow(x_test[58])
     # plt.show()
